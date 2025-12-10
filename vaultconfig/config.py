@@ -58,7 +58,7 @@ class ConfigEntry:
         """
         # Support dot notation for nested keys
         keys = key.split(".")
-        value = self._data
+        value: Any = self._data
 
         for k in keys:
             if isinstance(value, dict):
@@ -90,7 +90,7 @@ class ConfigEntry:
         if not reveal_secrets:
             return self._data.copy()
 
-        result = {}
+        result: dict[str, Any] = {}
         for key, value in self._data.items():
             if isinstance(value, dict):
                 result[key] = self._reveal_nested(value, key)
@@ -118,7 +118,7 @@ class ConfigEntry:
         Returns:
             Data with revealed secrets
         """
-        result = {}
+        result: dict[str, Any] = {}
         for key, value in data.items():
             full_key = f"{prefix}.{key}"
             if isinstance(value, dict):

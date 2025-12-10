@@ -8,19 +8,19 @@ if TYPE_CHECKING:
     from pydantic import BaseModel
 
 try:
-    from pydantic import BaseModel, ConfigDict, Field, ValidationError  # type: ignore
+    from pydantic import BaseModel, ConfigDict, Field, ValidationError
 
     HAS_PYDANTIC = True
 except ImportError:
     HAS_PYDANTIC = False
-    BaseModel = object  # type: ignore
+    BaseModel = object  # type: ignore[assignment, misc]
 
-    def Field(**kwargs):  # type: ignore  # noqa: N802
+    def Field(**kwargs):  # type: ignore[no-untyped-def, no-redef]  # noqa: N802
         """Stub for Field when pydantic is not available."""
         return None
 
-    ValidationError = Exception  # type: ignore
-    ConfigDict = dict  # type: ignore
+    ValidationError = Exception  # type: ignore[assignment, misc]
+    ConfigDict = dict  # type: ignore[assignment, misc]
 
 from vaultconfig.exceptions import SchemaValidationError
 
@@ -63,7 +63,8 @@ class ConfigSchema:
         """
         try:
             validated = self.model(**data)
-            return validated.model_dump()
+            result: dict[str, Any] = validated.model_dump()
+            return result
         except ValidationError as e:
             raise SchemaValidationError(f"Schema validation failed: {e}") from e
         except Exception as e:
@@ -75,7 +76,7 @@ class ConfigSchema:
         Returns:
             Set of field names marked as sensitive
         """
-        sensitive = set()
+        sensitive: set[str] = set()
 
         if not HAS_PYDANTIC:
             return sensitive
@@ -96,13 +97,13 @@ class ConfigSchema:
         Returns:
             Dictionary of field names to default values
         """
-        defaults = {}
+        defaults: dict[str, Any] = {}
 
         if not HAS_PYDANTIC:
             return defaults
 
         # Import PydanticUndefined to check for it
-        from pydantic_core import PydanticUndefined as Undef  # type: ignore
+        from pydantic_core import PydanticUndefined as Undef
 
         for field_name, field_info in self.model.model_fields.items():
             if field_info.default is not Undef and field_info.default is not None:

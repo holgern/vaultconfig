@@ -69,7 +69,7 @@ Clone the repository and install in development mode:
 
 .. code-block:: bash
 
-   git clone https://github.com/yourusername/vaultconfig.git
+   git clone https://github.com/holgern/vaultconfig.git
    cd vaultconfig
    pip install -e ".[dev,yaml]"
 

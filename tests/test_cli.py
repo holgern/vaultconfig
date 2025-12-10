@@ -66,7 +66,9 @@ def test_cli_init_existing_directory(cli_runner, config_dir):
     # Try to init again - should warn
     result = cli_runner.invoke(main, ["init", str(config_dir)], input="n\n")
     assert result.exit_code == 0
-    assert "already exists" in result.output
+    # Check for warning message (may contain line breaks)
+    assert "already" in result.output and "exists" in result.output
+    assert "not empty" in result.output
 
 
 def test_cli_list_empty(cli_runner, config_dir):

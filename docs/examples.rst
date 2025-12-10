@@ -682,4 +682,4 @@ Migrate Between Formats
        dest_format="yaml",
    )
 
-For more examples, see the project repository: https://github.com/yourusername/vaultconfig
+For more examples, see the project repository: https://github.com/holgern/vaultconfig

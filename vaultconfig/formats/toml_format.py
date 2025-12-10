@@ -15,12 +15,12 @@ else:
     try:
         import tomli as tomllib
     except ImportError:
-        tomllib = None  # type: ignore
+        tomllib = None  # type: ignore[assignment]
 
 try:
     import tomli_w
 except ImportError:
-    tomli_w = None  # type: ignore
+    tomli_w = None  # type: ignore[assignment]
 
 
 class TOMLFormat(ConfigFormat):
@@ -94,7 +94,7 @@ class TOMLFormat(ConfigFormat):
 
         # Try to parse as TOML
         if tomllib is None:
-            return False
+            return False  # type: ignore[unreachable]
 
         try:
             tomllib.loads(data)

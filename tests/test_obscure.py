@@ -151,8 +151,10 @@ class TestObscureErrors:
         password = "test_password"
         obscured = obscure.obscure(password)
 
-        # Corrupt the obscured data
-        corrupted = obscured[:-5] + "XXXXX"
+        # Corrupt the obscured data more severely - flip bits in the middle
+        # This ensures we corrupt the actual encrypted data, not just the end
+        mid = len(obscured) // 2
+        corrupted = obscured[:mid] + "XXXXX" + obscured[mid + 5 :]
 
         with pytest.raises(ValueError):
             obscure.reveal(corrupted)
