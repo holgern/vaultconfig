@@ -342,15 +342,20 @@ def test_config_manager_is_encrypted(config_dir):
 
 def test_config_manager_file_permissions(config_dir):
     """Test that config files have secure permissions."""
+    import platform
+    import stat
+
     manager = ConfigManager(config_dir)
     manager.add_config("test", {"key": "value"}, obscure_passwords=False)
 
     config_file = config_dir / "test.toml"
-    # Check permissions are 0o600 (owner read/write only)
-    import stat
+    assert config_file.exists()
 
-    mode = config_file.stat().st_mode
-    assert stat.S_IMODE(mode) == 0o600
+    # Check permissions are 0o600 (owner read/write only) on Unix-like systems
+    # Windows doesn't support Unix-style permissions, so skip this check
+    if platform.system() != "Windows":
+        mode = config_file.stat().st_mode
+        assert stat.S_IMODE(mode) == 0o600
 
 
 def test_config_manager_ini_format(config_dir):
