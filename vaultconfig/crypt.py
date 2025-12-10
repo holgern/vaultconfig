@@ -283,7 +283,8 @@ def get_password(prompt: str = "Config password: ", changing: bool = False) -> s
 
             # SECURITY: Use shlex.split() to safely parse command
             # This prevents shell injection while still allowing complex commands
-            cmd_args = shlex.split(password_cmd)
+            # On Windows, use posix=False to handle Windows-style paths correctly
+            cmd_args = shlex.split(password_cmd, posix=(os.name != "nt"))
 
             result = subprocess.run(
                 cmd_args,
