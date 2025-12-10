@@ -73,8 +73,8 @@ def _secure_write_file(path: Path, data: bytes) -> None:
         temp_fd.close()
 
         # Atomic rename (overwrites existing file)
-        # On POSIX systems, this is atomic and won't leave partial file
-        temp_path.rename(path)
+        # os.replace() works atomically on both Windows and POSIX
+        os.replace(temp_fd.name, path)
         temp_path = None  # Successfully renamed, don't delete
 
     except Exception as e:
