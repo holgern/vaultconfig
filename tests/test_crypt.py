@@ -254,58 +254,43 @@ class TestGetPassword:
 
     def test_get_password_from_command(self, monkeypatch, tmp_path):
         """Test getting password from command."""
-        import platform
         import sys
 
-        # Create a platform-appropriate password command
-        if platform.system() == "Windows":
-            cmd_file = tmp_path / "get_password.bat"
-            cmd_file.write_text("@echo off\necho command_password_123")
-        else:
-            cmd_file = tmp_path / "get_password.sh"
-            cmd_file.write_text("#!/bin/sh\necho 'command_password_123'")
-            cmd_file.chmod(0o755)
+        # Create a Python script that works cross-platform
+        cmd_file = tmp_path / "get_password.py"
+        cmd_file.write_text("import sys\nprint('command_password_123')")
 
         monkeypatch.delenv(crypt.ENV_PASSWORD, raising=False)
 
-        # On Windows, we need to use the full path with extension
-        if platform.system() == "Windows":
-            monkeypatch.setenv(crypt.ENV_PASSWORD_COMMAND, str(cmd_file))
-        else:
-            monkeypatch.setenv(crypt.ENV_PASSWORD_COMMAND, str(cmd_file))
+        # Use Python to execute the script (works on all platforms)
+        monkeypatch.setenv(
+            crypt.ENV_PASSWORD_COMMAND, f'"{sys.executable}" "{cmd_file}"'
+        )
 
         password = crypt.get_password()
         assert password == "command_password_123"
 
     def test_get_password_command_with_change_flag(self, monkeypatch, tmp_path):
         """Test password command receives VAULTCONFIG_PASSWORD_CHANGE flag."""
-        import platform
+        import sys
 
-        # Create command that outputs environment variable
-        if platform.system() == "Windows":
-            cmd_file = tmp_path / "pwd.bat"
-            cmd_file.write_text(
-                "@echo off\n"
-                'if "%VAULTCONFIG_PASSWORD_CHANGE%"=="1" (\n'
-                "  echo new_password\n"
-                ") else (\n"
-                "  echo old_password\n"
-                ")"
-            )
-        else:
-            cmd_file = tmp_path / "pwd.sh"
-            cmd_file.write_text(
-                "#!/bin/sh\n"
-                'if [ "$VAULTCONFIG_PASSWORD_CHANGE" = "1" ]; then\n'
-                "  echo 'new_password'\n"
-                "else\n"
-                "  echo 'old_password'\n"
-                "fi"
-            )
-            cmd_file.chmod(0o755)
+        # Create a Python script that checks environment variable (cross-platform)
+        cmd_file = tmp_path / "pwd.py"
+        cmd_file.write_text(
+            "import os\n"
+            "import sys\n"
+            "if os.environ.get('VAULTCONFIG_PASSWORD_CHANGE') == '1':\n"
+            "    print('new_password')\n"
+            "else:\n"
+            "    print('old_password')\n"
+        )
 
         monkeypatch.delenv(crypt.ENV_PASSWORD, raising=False)
-        monkeypatch.setenv(crypt.ENV_PASSWORD_COMMAND, str(cmd_file))
+
+        # Use Python to execute the script (works on all platforms)
+        monkeypatch.setenv(
+            crypt.ENV_PASSWORD_COMMAND, f'"{sys.executable}" "{cmd_file}"'
+        )
 
         # Normal call
         password = crypt.get_password(changing=False)
