@@ -213,7 +213,7 @@ def test_cli_encrypt_set(cli_runner, config_dir):
     config_file = config_dir / "test.toml"
     with open(config_file, "rb") as f:
         content = f.read()
-    assert b"VAULTCONFIG_ENCRYPT_V0" in content
+    assert b"VAULTCONFIG_ENCRYPT_V1" in content
 
 
 def test_cli_encrypt_set_password_mismatch(cli_runner, config_dir):
@@ -248,7 +248,8 @@ def test_cli_encrypt_remove(cli_runner, config_dir):
     config_file = config_dir / "test.toml"
     with open(config_file, "rb") as f:
         content = f.read()
-    assert b"VAULTCONFIG_ENCRYPT_V0" not in content
+    assert b"VAULTCONFIG_ENCRYPT_V1" not in content
+    assert b"VAULTCONFIG_ENCRYPT_" not in content  # No encryption at all
 
 
 def test_cli_encrypt_remove_cancel(cli_runner, config_dir):

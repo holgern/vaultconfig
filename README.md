@@ -15,11 +15,13 @@ multiple formats (TOML, INI, YAML), password obscuring, and full config file enc
 - **Multiple Format Support**: TOML, INI, and YAML (optional)
 - **Password Obscuring**: Hide sensitive fields from casual viewing (AES-CTR based)
 - **Config File Encryption**: Strong authenticated encryption using NaCl secretbox
-  (XSalsa20 + Poly1305)
+  (XSalsa20-Poly1305) with PBKDF2 key derivation
 - **Schema Validation**: Pydantic-based schema system for type validation
 - **CLI Tool**: Command-line interface for config management
 - **Project-Specific**: Each project can have its own config directory
 - **Easy Integration**: Simple API for embedding into Python applications
+- **Security Features**: Atomic file writes, secure file permissions, password
+  validation
 
 ## Installation
 
@@ -184,6 +186,8 @@ VaultConfig provides two levels of security:
 - **Security**: NOT secure encryption - anyone with access to the code can decrypt
 - **Use Case**: Prevent accidental exposure in config files, logs, or screens
 - **Automatic**: Sensitive fields are automatically obscured when `sensitive=True`
+- **Warning**: A security warning is logged on first use to remind users this is
+  obfuscation only
 
 ```python
 from vaultconfig import obscure
@@ -195,13 +199,19 @@ obscured = obscure.obscure("my_password")  # Returns base64 string
 revealed = obscure.reveal(obscured)  # Returns "my_password"
 ```
 
+**IMPORTANT**: This is obfuscation, not encryption! Anyone with access to vaultconfig
+can decrypt obscured passwords. Use config file encryption for real security.
+
 ### Config File Encryption
 
 - **Purpose**: Secure encryption of entire config files
-- **Method**: NaCl secretbox (XSalsa20-Poly1305) with password-derived key
+- **Method**: NaCl secretbox (XSalsa20-Poly1305) with PBKDF2-HMAC-SHA256 key derivation
+- **Key Derivation**: 600,000 iterations of PBKDF2 with random salt (OWASP 2023
+  recommended)
 - **Security**: Strong authenticated encryption - lost password = lost data
 - **Use Case**: Protect sensitive configs at rest
-- **Format**: `VAULTCONFIG_ENCRYPT_V0:<base64-encrypted-data>`
+- **Format**: `VAULTCONFIG_ENCRYPT_V1:<base64-encrypted-data>`
+- **Password Requirements**: Minimum 4 characters (12+ recommended)
 
 ```python
 # Encrypt all configs
@@ -269,20 +279,32 @@ nested:
    - NOT secure encryption - only prevents casual viewing
    - Anyone with code access can reveal passwords
    - Use for convenience, not security
+   - A warning is logged on first use
 
 2. **Config File Encryption**:
 
    - Uses strong authenticated encryption (NaCl secretbox)
-   - Password is hashed with SHA-256 + salt
+   - Password is derived using PBKDF2-HMAC-SHA256 with 600,000 iterations
+   - Random salt generated per encryption
    - No password recovery - lost password = lost data
-   - Password strength is user's responsibility
+   - Minimum password length: 4 characters (12+ strongly recommended)
+   - Warnings shown for weak or short passwords
 
-3. **Best Practices**:
+3. **File Security**:
+
+   - Config files automatically set to 0600 permissions (owner read/write only)
+   - Atomic file writes prevent partial/corrupted files
+   - Secure deletion of temporary files on error
+   - No race conditions in file permission setting
+
+4. **Best Practices**:
    - Use config file encryption for production
+   - Use strong passwords (12+ characters recommended)
    - Store encryption passwords in system keychain/password manager
    - Use `VAULTCONFIG_PASSWORD_COMMAND` for automation
-   - Set config files to 0600 permissions (owner read/write only)
    - Never commit encrypted configs with weak passwords
+   - Keep PyYAML updated (>= 6.0 for security fixes)
+   - Avoid using shell=True with password commands (use proper escaping)
 
 ## Integration Examples
 

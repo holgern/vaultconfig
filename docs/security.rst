@@ -21,6 +21,7 @@ Password Obscuring
 - Provides convenience, not security
 - Similar to rclone's config obscuring
 - Useful for preventing casual exposure in logs, screens, or backups
+- A security warning is logged on first use to remind users
 
 **Use When**:
 
@@ -34,16 +35,19 @@ Config File Encryption
 
 **Purpose**: Strong encryption of entire config files
 
-**Method**: NaCl secretbox (XSalsa20-Poly1305) with password-derived key
+**Method**: NaCl secretbox (XSalsa20-Poly1305) with PBKDF2-HMAC-SHA256 key derivation
 
 **Security Level**: High - Authenticated encryption with strong algorithms
 
 **Key Points**:
 
 - Uses PyNaCl (libsodium) for encryption
-- Password is derived using SHA-256 + salt
+- Password is derived using PBKDF2-HMAC-SHA256 with 600,000 iterations (OWASP 2023 recommended)
+- Random 16-byte salt generated per encryption
 - Authenticated encryption prevents tampering
 - Lost password = lost data (no recovery)
+- Minimum password length: 4 characters (12+ strongly recommended)
+- Warnings shown for weak or short passwords
 
 **Use When**:
 
@@ -90,7 +94,9 @@ Config File Encryption Implementation
 Algorithm:
 
 - NaCl secretbox (XSalsa20-Poly1305)
-- 256-bit key derived from password
+- 256-bit key derived from password using PBKDF2-HMAC-SHA256
+- 600,000 iterations (OWASP 2023 recommended)
+- Random 16-byte salt per encryption
 - 192-bit random nonce per encryption
 - Authenticated encryption (prevents tampering)
 
@@ -98,21 +104,31 @@ Key Derivation:
 
 .. code-block:: python
 
-   key = SHA256(password + salt)
+   salt = random_bytes(16)  # Random 16-byte salt
+   key = PBKDF2-HMAC-SHA256(password, salt, iterations=600000, length=32)
 
 Format:
 
 .. code-block:: text
 
-   VAULTCONFIG_ENCRYPT_V0:
-   <base64(nonce + ciphertext + tag)>
+   VAULTCONFIG_ENCRYPT_V1:
+   <base64(salt + nonce + ciphertext + tag)>
 
 Example:
 
 .. code-block:: text
 
-   VAULTCONFIG_ENCRYPT_V0:
+   VAULTCONFIG_ENCRYPT_V1:
    aGVsbG8gd29ybGQgdGhpcyBpcyBhIHRlc3QgZW5jcnlwdGVkIGRhdGE=
+
+Security Improvements in V1:
+
+- Replaced single SHA-256 with PBKDF2 (600,000 iterations)
+- Random salt per encryption (prevents rainbow tables)
+- Atomic file writes (prevents partial/corrupted files)
+- Secure file permissions from creation (0600)
+- Secure deletion of temp files on error
+- Password validation with warnings
 
 Best Practices
 --------------
@@ -122,19 +138,22 @@ Password Management
 
 **DO**:
 
-- Use strong, unique passwords (20+ characters)
+- Use strong, unique passwords (12+ characters recommended, 4 minimum)
 - Store passwords in a password manager
 - Use ``VAULTCONFIG_PASSWORD_COMMAND`` with password managers
 - Rotate passwords periodically
 - Use different passwords for different environments
+- Heed password strength warnings
 
 **DON'T**:
 
 - Use weak or common passwords
+- Use passwords shorter than 12 characters for sensitive data
 - Store passwords in plain text files
 - Reuse passwords across systems
 - Share passwords via insecure channels
 - Hard-code passwords in scripts
+- Use shell=True with untrusted password commands
 
 Example with password manager:
 
@@ -150,15 +169,18 @@ Example with password manager:
 File Permissions
 ~~~~~~~~~~~~~~~~
 
-Always restrict config file permissions:
+VaultConfig automatically sets secure file permissions (0600 - owner read/write only)
+when creating or modifying config files. This prevents other users from reading
+sensitive configuration data.
+
+Additional manual steps for directory permissions:
 
 .. code-block:: bash
 
    # Directory: owner read/write/execute only
    chmod 700 ./myapp-config
 
-   # Files: owner read/write only
-   chmod 600 ./myapp-config/*
+   # Files are automatically set to 600 by VaultConfig
 
 On Windows:
 
@@ -166,6 +188,13 @@ On Windows:
 
    # Remove inheritance and set owner-only permissions
    icacls "myapp-config" /inheritance:r /grant:r "$env:USERNAME:(OI)(CI)F"
+
+Security Features:
+
+- Atomic file writes prevent partial/corrupted files
+- Secure permissions set from file creation (no race condition)
+- Temporary files securely deleted on error
+- No exposure window with default permissions
 
 Version Control
 ~~~~~~~~~~~~~~~

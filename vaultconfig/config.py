@@ -3,6 +3,8 @@
 from __future__ import annotations
 
 import logging
+import os
+import tempfile
 from pathlib import Path
 from typing import Any
 
@@ -24,6 +26,76 @@ _FORMAT_REGISTRY: dict[str, type[ConfigFormat]] = {
     "ini": INIFormat,
     "yaml": YAMLFormat,
 }
+
+
+def _secure_write_file(path: Path, data: bytes) -> None:
+    """Write file atomically with secure permissions.
+
+    This function:
+    1. Creates temp file with secure permissions (0o600) from the start
+    2. Writes data to temp file
+    3. Atomically renames temp file to final path
+    4. Securely deletes temp file on error
+
+    Args:
+        path: Target file path
+        data: Data to write
+
+    Raises:
+        OSError: If write or rename fails
+    """
+    # Ensure parent directory exists
+    path.parent.mkdir(parents=True, exist_ok=True)
+
+    # Create temp file in same directory (for atomic rename on same filesystem)
+    temp_fd = None
+    temp_path = None
+
+    try:
+        # SECURITY: Create temp file with secure permissions (0o600) from the start
+        # This prevents race condition where file is created with default perms
+        temp_fd = tempfile.NamedTemporaryFile(
+            mode="wb",
+            dir=path.parent,
+            prefix=f".{path.name}.",
+            suffix=".tmp",
+            delete=False,  # We'll handle deletion manually
+        )
+        temp_path = Path(temp_fd.name)
+
+        # Set secure permissions immediately (defense in depth)
+        os.chmod(temp_fd.name, 0o600)
+
+        # Write data
+        temp_fd.write(data)
+        temp_fd.flush()
+        os.fsync(temp_fd.fileno())  # Ensure data is written to disk
+        temp_fd.close()
+
+        # Atomic rename (overwrites existing file)
+        # On POSIX systems, this is atomic and won't leave partial file
+        temp_path.rename(path)
+        temp_path = None  # Successfully renamed, don't delete
+
+    except Exception as e:
+        # SECURITY: Attempt secure deletion of temp file on error
+        if temp_path and temp_path.exists():
+            try:
+                # Overwrite with zeros before deleting (basic secure deletion)
+                size = temp_path.stat().st_size
+                with open(temp_path, "wb") as f:
+                    f.write(b"\x00" * size)
+                    f.flush()
+                    os.fsync(f.fileno())
+                temp_path.unlink()
+            except Exception as del_error:
+                logger.warning(
+                    f"Failed to securely delete temp file {temp_path}: {del_error}"
+                )
+        raise OSError(f"Failed to write file {path}: {e}") from e
+    finally:
+        if temp_fd and not temp_fd.closed:
+            temp_fd.close()
 
 
 class ConfigEntry:
@@ -261,9 +333,6 @@ class ConfigManager:
         config_file = self._get_config_file(name)
         config_entry = self._configs[name]
 
-        # Create directory if needed
-        config_file.parent.mkdir(parents=True, exist_ok=True)
-
         # Serialize config
         config_str = self._format_handler.dump(config_entry._data)
         data = config_str.encode("utf-8")
@@ -272,12 +341,8 @@ class ConfigManager:
         if self._password is not None:
             data = crypt.encrypt(data, self._password)
 
-        # Write file
-        with open(config_file, "wb") as f:
-            f.write(data)
-
-        # Set secure permissions (owner read/write only)
-        config_file.chmod(0o600)
+        # Write file atomically with secure permissions
+        _secure_write_file(config_file, data)
 
         logger.debug(f"Saved config '{name}' to {config_file}")
 

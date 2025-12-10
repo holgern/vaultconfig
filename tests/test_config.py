@@ -283,7 +283,7 @@ def test_config_manager_encryption(config_dir):
     config_file = config_dir / "test.toml"
     with open(config_file, "rb") as f:
         content = f.read()
-    assert b"VAULTCONFIG_ENCRYPT_V0" in content
+    assert b"VAULTCONFIG_ENCRYPT_V1" in content
 
     # Load with new manager with same password
     manager2 = ConfigManager(config_dir, password="mypassword")
@@ -304,7 +304,7 @@ def test_config_manager_set_encryption_password(config_dir):
     config_file = config_dir / "test.toml"
     with open(config_file, "rb") as f:
         content = f.read()
-    assert b"VAULTCONFIG_ENCRYPT_V0" in content
+    assert b"VAULTCONFIG_ENCRYPT_V1" in content
 
     # Load with new manager
     manager2 = ConfigManager(config_dir, password="newpassword")
@@ -323,7 +323,8 @@ def test_config_manager_remove_encryption(config_dir):
     config_file = config_dir / "test.toml"
     with open(config_file, "rb") as f:
         content = f.read()
-    assert b"VAULTCONFIG_ENCRYPT_V0" not in content
+    assert b"VAULTCONFIG_ENCRYPT_V1" not in content
+    assert b"VAULTCONFIG_ENCRYPT_" not in content  # No encryption at all
 
     # Load with new manager without password
     manager2 = ConfigManager(config_dir)

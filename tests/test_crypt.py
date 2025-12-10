@@ -121,30 +121,48 @@ class TestDeriveKey:
     """Test key derivation."""
 
     def test_derive_key_consistent(self):
-        """Test that same password produces same key."""
+        """Test that same password with same salt produces same key."""
         password = "test_password"
+        salt = b"fixed_salt_12345"  # Use fixed salt for consistency test
 
-        key1 = crypt.derive_key(password)
-        key2 = crypt.derive_key(password)
+        key1, salt1 = crypt.derive_key(password, salt=salt)
+        key2, salt2 = crypt.derive_key(password, salt=salt)
 
         assert key1 == key2
+        assert salt1 == salt2 == salt
+
+    def test_derive_key_random_salt(self):
+        """Test that same password with random salts produces different keys."""
+        password = "test_password"
+
+        key1, salt1 = crypt.derive_key(password)
+        key2, salt2 = crypt.derive_key(password)
+
+        # Different salts should produce different keys
+        assert salt1 != salt2
+        assert key1 != key2
 
     def test_derive_key_different_passwords(self):
         """Test that different passwords produce different keys."""
         password1 = "password1"
         password2 = "password2"
+        salt = b"same_salt_123456"  # Use same salt
 
-        key1 = crypt.derive_key(password1)
-        key2 = crypt.derive_key(password2)
+        key1, _ = crypt.derive_key(password1, salt=salt)
+        key2, _ = crypt.derive_key(password2, salt=salt)
 
         assert key1 != key2
 
     def test_derive_key_length(self):
-        """Test that derived key is correct length (32 bytes for NaCl)."""
+        """Test that derived key is correct length."""
         password = "test_password"
-        key = crypt.derive_key(password)
 
+        key, salt = crypt.derive_key(password)
+
+        # NaCl requires 32-byte key
         assert len(key) == 32
+        # Salt should be 16 bytes
+        assert len(salt) == 16
 
     def test_derive_key_empty_password_fails(self):
         """Test that empty password fails."""
@@ -290,8 +308,8 @@ class TestCheckPassword:
         valid_passwords = [
             "simple_password",
             "p@$$w0rd!",
-            "πароль",  # Unicode
-            "密码",  # Chinese
+            "пароль123",  # Unicode (8 chars)
+            "密码密码",  # Chinese (4 chars)
             "pass with spaces",
         ]
 
@@ -309,6 +327,37 @@ class TestCheckPassword:
         """Test that whitespace-only password fails."""
         with pytest.raises(ValueError, match="at least one non-whitespace"):
             crypt.check_password("   ")
+
+    def test_check_password_too_short_fails(self):
+        """Test that password shorter than 4 characters fails."""
+        # Test 1, 2, 3 character passwords
+        for password in ["a", "ab", "abc"]:
+            with pytest.raises(ValueError, match="at least 4 characters"):
+                crypt.check_password(password)
+
+    def test_check_password_minimum_length(self):
+        """Test that 4 character password is accepted with warning."""
+        password = "abcd"
+        normalized, warnings = crypt.check_password(password)
+        assert normalized == password
+        # Should have warning about being shorter than 12 characters
+        assert any("shorter than recommended 12 characters" in w for w in warnings)
+
+    def test_check_password_short_warning(self):
+        """Test that passwords < 12 characters get a warning."""
+        short_passwords = ["1234", "12345", "password1", "short"]
+        for password in short_passwords:
+            normalized, warnings = crypt.check_password(password)
+            assert normalized == password
+            assert any("shorter than recommended 12 characters" in w for w in warnings)
+
+    def test_check_password_no_warning_long(self):
+        """Test that passwords >= 12 characters don't get short password warning."""
+        password = "this_is_a_very_long_secure_password"
+        normalized, warnings = crypt.check_password(password)
+        assert normalized == password
+        # Should not have warning about length
+        assert not any("shorter than recommended" in w for w in warnings)
 
     def test_check_password_leading_trailing_whitespace_warning(self):
         """Test warning for leading/trailing whitespace."""

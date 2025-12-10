@@ -1,18 +1,36 @@
 """Password obscuring utilities for vaultconfig.
 
-This is NOT encryption! It's designed to prevent casual "shoulder surfing"
+SECURITY WARNING: This is NOT encryption!
+
+This module provides OBFUSCATION ONLY to prevent casual "shoulder surfing"
 of passwords in config files. Anyone with access to this code can decrypt
 the passwords.
 
-Uses AES-CTR encryption with a fixed key (similar to rclone's approach).
+DO NOT USE THIS FOR SECURITY:
+- The encryption key is hardcoded in this module
+- Anyone with access to vaultconfig can decrypt obscured passwords
+- This provides NO protection against anyone who can read your config files
+- For real security, use the encrypt/decrypt functionality in crypt.py
+
+This is similar to rclone's password obscuring approach.
 Note: We use our own unique key, not rclone's key.
+
+Use cases for obscuring:
+- Prevent casual viewing of passwords in config files
+- Avoid passwords appearing in plain text in logs/screenshots
+- Basic protection in shared development environments
+
+For production security requirements, use proper encryption instead.
 """
 
 from __future__ import annotations
 
 import base64
+import logging
 import os
 from typing import Final
+
+logger = logging.getLogger(__name__)
 
 try:
     import cryptography  # noqa: F401
@@ -63,6 +81,9 @@ _CIPHER_KEY: Final[bytes] = bytes(
 # AES block size
 _AES_BLOCK_SIZE: Final[int] = 16
 
+# Track if security warning has been shown (to avoid spamming)
+_SECURITY_WARNING_SHOWN: bool = False
+
 
 def _crypt(data: bytes, iv: bytes) -> bytes:
     """AES-CTR encryption/decryption (same operation for both).
@@ -96,6 +117,12 @@ def _crypt(data: bytes, iv: bytes) -> bytes:
 def obscure(password: str) -> str:
     """Obscure a password using AES-CTR + base64 encoding.
 
+    SECURITY WARNING: This is obfuscation, NOT encryption!
+
+    This function uses a hardcoded key that anyone with access to this code
+    can use to decrypt the password. For real security, use the encrypt/decrypt
+    functionality in vaultconfig.crypt instead.
+
     Args:
         password: Plain text password to obscure
 
@@ -106,6 +133,17 @@ def obscure(password: str) -> str:
         >>> obscure("mypassword123")
         'FZq5EuI...'  # Random IV makes output different each time
     """
+    global _SECURITY_WARNING_SHOWN
+
+    # Warn users on first use (only once per session)
+    if not _SECURITY_WARNING_SHOWN:
+        logger.warning(
+            "SECURITY: obscure() provides obfuscation only, not encryption. "
+            "Anyone with access to vaultconfig can decrypt obscured passwords. "
+            "For real security, use vaultconfig.crypt.encrypt() instead."
+        )
+        _SECURITY_WARNING_SHOWN = True
+
     if not password:
         return ""
 
@@ -126,6 +164,9 @@ def obscure(password: str) -> str:
 
 def reveal(obscured_password: str) -> str:
     """Reveal an obscured password.
+
+    NOTE: This demonstrates that obscured passwords provide NO real security.
+    Anyone with access to this code can reveal obscured passwords.
 
     Args:
         obscured_password: Base64-encoded obscured password

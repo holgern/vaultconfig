@@ -5,18 +5,19 @@ using the NaCl secretbox construction (XSalsa20 + Poly1305).
 
 Security notes:
 - Uses strong authenticated encryption (XSalsa20-Poly1305)
-- Password is hashed with SHA-256 and a salt
+- Password is derived using PBKDF2-HMAC-SHA256 with 600,000 iterations
+- Random 16-byte salt generated for each password (stored with encrypted data)
 - Random 24-byte nonce used for each encryption
 - No password recovery - lost password means lost data
-- Password strength is the user's responsibility
+- Use strong passwords (12+ characters recommended)
 """
 
 from __future__ import annotations
 
 import base64
 import getpass
-import hashlib
 import os
+import shlex
 import subprocess
 import sys
 from typing import Final
@@ -35,14 +36,17 @@ try:
 except ImportError:
     HAS_NACL = False
 
-# Encryption format version marker
-ENCRYPTION_HEADER: Final[str] = "VAULTCONFIG_ENCRYPT_V0:"
+# Encryption format version marker (V1 uses PBKDF2)
+ENCRYPTION_HEADER_V1: Final[str] = "VAULTCONFIG_ENCRYPT_V1:"
+# Current version
+ENCRYPTION_HEADER: Final[str] = ENCRYPTION_HEADER_V1
 
 # NaCl secretbox nonce size (24 bytes for XSalsa20)
 NONCE_SIZE: Final[int] = 24
 
-# Salt for password hashing
-PASSWORD_SALT: Final[str] = "[vaultconfig-secure]"
+# PBKDF2 parameters (OWASP recommended 2023+)
+PBKDF2_ITERATIONS: Final[int] = 600_000
+PBKDF2_SALT_SIZE: Final[int] = 16  # 128 bits
 
 # Environment variable names
 ENV_PASSWORD: Final[str] = "VAULTCONFIG_PASSWORD"
@@ -63,36 +67,55 @@ def _check_nacl_available() -> None:
         )
 
 
-def derive_key(password: str) -> bytes:
-    """Derive encryption key from password using SHA-256.
+def derive_key(password: str, salt: bytes | None = None) -> tuple[bytes, bytes]:
+    """Derive encryption key from password using PBKDF2-HMAC-SHA256.
 
     Args:
         password: User password
+        salt: Salt for key derivation (generates random if None)
 
     Returns:
-        32-byte encryption key suitable for NaCl secretbox
+        Tuple of (32-byte encryption key, salt used)
 
     Raises:
         ValueError: If password is empty
+        ImportError: If cryptography library not available
     """
     if not password:
         raise ValueError("Password cannot be empty")
 
-    # Hash password with salt (similar to rclone's approach)
-    sha = hashlib.sha256()
-    sha.update(f"[{password}]{PASSWORD_SALT}".encode())
-    return sha.digest()  # 32 bytes
+    try:
+        from cryptography.hazmat.primitives import hashes
+        from cryptography.hazmat.primitives.kdf.pbkdf2 import PBKDF2HMAC
+    except ImportError as e:
+        raise ImportError(
+            "PBKDF2 key derivation requires 'cryptography' library. "
+            "Install it with: pip install cryptography"
+        ) from e
+
+    # Generate random salt if not provided
+    if salt is None:
+        salt = os.urandom(PBKDF2_SALT_SIZE)
+
+    kdf = PBKDF2HMAC(
+        algorithm=hashes.SHA256(),
+        length=32,  # 32 bytes for NaCl
+        salt=salt,
+        iterations=PBKDF2_ITERATIONS,
+    )
+    key = kdf.derive(password.encode("utf-8"))
+    return key, salt
 
 
 def encrypt(data: bytes, password: str) -> bytes:
-    """Encrypt config data using NaCl secretbox.
+    """Encrypt config data using NaCl secretbox with PBKDF2 key derivation.
 
     Args:
         data: Config data to encrypt
         password: Encryption password
 
     Returns:
-        Encrypted data with header and base64 encoding
+        Encrypted data with header, salt, and base64 encoding
 
     Raises:
         EncryptionError: If encryption fails
@@ -101,8 +124,8 @@ def encrypt(data: bytes, password: str) -> bytes:
     _check_nacl_available()
 
     try:
-        # Derive key from password
-        key = derive_key(password)
+        # Derive key from password (generates random salt)
+        key, salt = derive_key(password)
 
         # Create NaCl secretbox
         box = nacl.secret.SecretBox(key)
@@ -110,13 +133,14 @@ def encrypt(data: bytes, password: str) -> bytes:
         # Generate random nonce
         nonce = nacl.utils.random(NONCE_SIZE)
 
-        # Encrypt data (secretbox.encrypt appends the nonce automatically)
-        # But we want explicit control, so we use encrypt with explicit nonce
+        # Encrypt data
         encrypted = box.encrypt(data, nonce)
 
-        # encrypted contains: nonce (24 bytes) + ciphertext + MAC (16 bytes)
+        # Format: salt (16 bytes) + encrypted (nonce + ciphertext + MAC)
+        result_bytes = salt + encrypted
+
         # Encode to base64
-        encoded = base64.b64encode(encrypted).decode("ascii")
+        encoded = base64.b64encode(result_bytes).decode("ascii")
 
         # Add version header
         result = f"{ENCRYPTION_HEADER}\n{encoded}\n"
@@ -128,7 +152,7 @@ def encrypt(data: bytes, password: str) -> bytes:
 
 
 def decrypt(data: bytes, password: str | None = None) -> bytes:
-    """Decrypt config data using NaCl secretbox.
+    """Decrypt config data using NaCl secretbox with PBKDF2 key derivation.
 
     Args:
         data: Encrypted config data (may include header)
@@ -158,7 +182,7 @@ def decrypt(data: bytes, password: str | None = None) -> bytes:
         if not lines[0].startswith("VAULTCONFIG_ENCRYPT_"):
             raise DecryptionError("Config is not encrypted (missing encryption header)")
 
-        # Check version - header should match exactly
+        # Check version
         if lines[0] != ENCRYPTION_HEADER.rstrip():
             version = lines[0].split(":")[0] if ":" in lines[0] else "unknown"
             raise DecryptionError(
@@ -178,12 +202,19 @@ def decrypt(data: bytes, password: str | None = None) -> bytes:
         except Exception as e:
             raise DecryptionError(f"Invalid base64 encoding: {e}") from e
 
+        # Extract salt
+        if len(encrypted_data) < PBKDF2_SALT_SIZE:
+            raise DecryptionError("Encrypted data too short (missing salt)")
+
+        salt = encrypted_data[:PBKDF2_SALT_SIZE]
+        encrypted_data = encrypted_data[PBKDF2_SALT_SIZE:]
+
         # Get password if not provided
         if password is None:
             password = get_password()
 
-        # Derive key
-        key = derive_key(password)
+        # Derive key using PBKDF2
+        key, _ = derive_key(password, salt=salt)
 
         # Create NaCl secretbox
         box = nacl.secret.SecretBox(key)
@@ -250,9 +281,13 @@ def get_password(prompt: str = "Config password: ", changing: bool = False) -> s
             if changing:
                 env[ENV_PASSWORD_CHANGE] = "1"
 
+            # SECURITY: Use shlex.split() to safely parse command
+            # This prevents shell injection while still allowing complex commands
+            cmd_args = shlex.split(password_cmd)
+
             result = subprocess.run(
-                password_cmd,
-                shell=True,
+                cmd_args,
+                shell=False,  # SECURITY: Never use shell=True with user input
                 capture_output=True,
                 text=True,
                 check=True,
@@ -263,6 +298,8 @@ def get_password(prompt: str = "Config password: ", changing: bool = False) -> s
                 return password
         except subprocess.CalledProcessError as e:
             raise ValueError(f"Password command failed: {e}") from e
+        except ValueError as e:
+            raise ValueError(f"Invalid password command format: {e}") from e
 
     # Interactive prompt (only if stdin is a TTY)
     if sys.stdin.isatty():
@@ -287,7 +324,7 @@ def check_password(password: str) -> tuple[str, list[str]]:
     """
     warnings = []
 
-    # Check if password is valid UTF-8 (already is if we got here)
+    # Check if password is empty
     if not password:
         raise ValueError("Password cannot be empty")
 
@@ -299,6 +336,41 @@ def check_password(password: str) -> tuple[str, list[str]]:
     # Check for at least one non-whitespace character
     if not stripped:
         raise ValueError("Password must contain at least one non-whitespace character")
+
+    # SECURITY: Minimum password length is 4 characters (bare minimum)
+    if len(stripped) < 4:
+        raise ValueError(
+            "Password must be at least 4 characters long. "
+            "For better security, use 12+ characters."
+        )
+
+    # SECURITY: Warn about short passwords (recommended minimum is 12 characters)
+    if len(stripped) < 12:
+        warnings.append(
+            "Password is shorter than recommended 12 characters. "
+            "Consider using a longer passphrase or password manager."
+        )
+
+    # SECURITY: Warn about common weak passwords
+    common_passwords = {
+        "password",
+        "123456",
+        "123456789",
+        "12345678",
+        "12345",
+        "1234567",
+        "password123",
+        "admin",
+        "secret",
+        "letmein",
+        "welcome",
+        "qwerty",
+    }
+    if stripped.lower() in common_passwords:
+        warnings.append(
+            "Password appears to be a common/weak password. "
+            "Consider choosing a stronger, unique password."
+        )
 
     # Unicode normalization (NFKC)
     import unicodedata
