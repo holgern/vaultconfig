@@ -106,7 +106,7 @@ def example_hex_key_obscurer():
     # You'd typically generate this once with: vaultconfig obscure generate-key
     hex_key = "a73b9f2ce15d4a8eb6f4c97a3e915cd28b4fa36e1bc57d9a2fe84ba63cd15e92"
 
-    print(f"Loading key from hex string...")
+    print("Loading key from hex string...")
     print(f"Hex key: {hex_key}")
 
     obscurer = create_obscurer_from_hex(hex_key)
@@ -178,7 +178,7 @@ def example_config_manager_with_custom_key():
     # Show the raw file content
     config_file = config_dir / "production.toml"
     print(f"\nRaw config file content ({config_file}):")
-    with open(config_file, "r") as f:
+    with open(config_file) as f:
         for line in f:
             print(f"  {line.rstrip()}")
 
@@ -242,15 +242,15 @@ def example_different_keys_comparison():
         # Try to reveal password obscured with Key-1 using Key-2
         wrong_reveal = obscurer2.reveal(obscured1)
         print(f"  Key-2 revealed Key-1's password: {wrong_reveal} (WRONG!)")
-    except Exception as e:
-        print(f"  ✓ Key-2 cannot reveal Key-1's password (as expected)")
+    except Exception:
+        print("  ✓ Key-2 cannot reveal Key-1's password (as expected)")
 
     try:
         # Try to reveal password obscured with Key-1 using default key
         wrong_reveal = obscurer3.reveal(obscured1)
         print(f"  Default revealed Key-1's password: {wrong_reveal} (WRONG!)")
-    except Exception as e:
-        print(f"  ✓ Default key cannot reveal Key-1's password (as expected)")
+    except Exception:
+        print("  ✓ Default key cannot reveal Key-1's password (as expected)")
 
     print("\nRevealing with correct keys:")
     print(f"  Key-1 reveals its own:   {obscurer1.reveal(obscured1)} ✓")
