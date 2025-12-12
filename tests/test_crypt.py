@@ -266,12 +266,11 @@ class TestGetPassword:
         # Use Python to execute the script (works on all platforms)
         # Use str() to ensure paths are strings, not Path objects
         if platform.system() == "Windows":
-            # On Windows, use python -c with inline script to avoid
-            # file execution issues
-            script_content = "print('command_password_123')"
+            # On Windows, use python with script file to avoid quoting issues
+            # shlex.split with posix=False doesn't handle nested quotes well
             monkeypatch.setenv(
                 crypt.ENV_PASSWORD_COMMAND,
-                f'{sys.executable} -c "{script_content}"',
+                f'"{sys.executable}" "{str(cmd_file)}"',
             )
         else:
             # On Unix, we can execute the script file directly
@@ -285,32 +284,20 @@ class TestGetPassword:
 
     def test_get_password_command_with_change_flag(self, monkeypatch, tmp_path):
         """Test password command receives VAULTCONFIG_PASSWORD_CHANGE flag."""
-        import platform
         import sys
 
         # Create command that checks environment variable (cross-platform)
-        if platform.system() == "Windows":
-            # On Windows, use python -c with inline script to avoid
-            # file execution issues
-            script_content = (
-                "import os; "
-                "print('new_password' if "
-                "os.environ.get('VAULTCONFIG_PASSWORD_CHANGE') == '1' "
-                "else 'old_password')"
-            )
-            cmd = f'{sys.executable} -c "{script_content}"'
-        else:
-            # On Unix, use a script file
-            cmd_file = tmp_path / "pwd.py"
-            cmd_file.write_text(
-                "import os\n"
-                "import sys\n"
-                "if os.environ.get('VAULTCONFIG_PASSWORD_CHANGE') == '1':\n"
-                "    print('new_password')\n"
-                "else:\n"
-                "    print('old_password')\n"
-            )
-            cmd = f'"{sys.executable}" "{str(cmd_file)}"'
+        # Use a script file to avoid quoting issues on all platforms
+        cmd_file = tmp_path / "pwd.py"
+        cmd_file.write_text(
+            "import os\n"
+            "import sys\n"
+            "if os.environ.get('VAULTCONFIG_PASSWORD_CHANGE') == '1':\n"
+            "    print('new_password')\n"
+            "else:\n"
+            "    print('old_password')\n"
+        )
+        cmd = f'"{sys.executable}" "{str(cmd_file)}"'
 
         monkeypatch.delenv(crypt.ENV_PASSWORD, raising=False)
         monkeypatch.setenv(crypt.ENV_PASSWORD_COMMAND, cmd)
