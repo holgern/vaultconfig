@@ -683,3 +683,121 @@ Migrate Between Formats
    )
 
 For more examples, see the project repository: https://github.com/holgern/vaultconfig
+
+INI Format with DEFAULT Section
+--------------------------------
+
+SSH-Style Configuration
+~~~~~~~~~~~~~~~~~~~~~~~
+
+INI format supports DEFAULT sections, similar to SSH config files:
+
+.. code-block:: python
+
+   from pathlib import Path
+   from vaultconfig import ConfigManager
+
+   # Create manager for INI files
+   manager = ConfigManager(
+       config_dir=Path("./config"),
+       format="ini",
+   )
+
+   # Add SSH-style configuration
+   manager.add_config("ssh_hosts", {
+       "DEFAULT": {
+           "ServerAliveInterval": "45",
+           "Compression": "yes",
+           "ForwardX11": "yes",
+       },
+       "forge.example": {
+           "User": "hg",
+       },
+       "topsecret.server.example": {
+           "Port": "50022",
+           "ForwardX11": "no",  # Override DEFAULT
+       },
+   })
+
+   # Access configuration
+   config = manager.get_config("ssh_hosts")
+
+   # Get host configuration (includes inherited DEFAULT values)
+   forge = config.get_all()["forge.example"]
+   print(f"User: {forge['User']}")
+   print(f"ServerAliveInterval: {forge['ServerAliveInterval']}")  # From DEFAULT
+   print(f"Compression: {forge['Compression']}")  # From DEFAULT
+
+   # topsecret host with overridden value
+   secret = config.get_all()["topsecret.server.example"]
+   print(f"Port: {secret['Port']}")
+   print(f"ForwardX11: {secret['ForwardX11']}")  # Overridden to 'no'
+
+Multi-Environment Configuration
+~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~
+
+.. code-block:: python
+
+   from pathlib import Path
+   from vaultconfig import ConfigManager
+
+   manager = ConfigManager(
+       config_dir=Path("./config"),
+       format="ini",
+   )
+
+   # Create multi-environment config with shared defaults
+   manager.add_config("environments", {
+       "DEFAULT": {
+           "timeout": "30",
+           "retry_count": "3",
+           "log_level": "INFO",
+           "protocol": "https",
+       },
+       "development": {
+           "host": "localhost",
+           "port": "8080",
+           "log_level": "DEBUG",  # Override for dev
+       },
+       "staging": {
+           "host": "staging.example.com",
+           "port": "443",
+       },
+       "production": {
+           "host": "prod.example.com",
+           "port": "443",
+           "timeout": "60",  # Override for production
+           "retry_count": "5",  # Override for production
+       },
+   })
+
+   # Access environment-specific configuration
+   config = manager.get_config("environments")
+
+   # Get production config (with overrides and inherited defaults)
+   prod = config.get_all()["production"]
+   print(f"Production: {prod['protocol']}://{prod['host']}:{prod['port']}")
+   print(f"Timeout: {prod['timeout']}s")  # 60 (overridden)
+   print(f"Retry: {prod['retry_count']}")  # 5 (overridden)
+   print(f"Log Level: {prod['log_level']}")  # INFO (from DEFAULT)
+
+The generated INI file:
+
+.. code-block:: ini
+
+   [DEFAULT]
+   timeout = 30
+   retry_count = 3
+   log_level = INFO
+   protocol = https
+
+   [development]
+   host = localhost
+   port = 8080
+   log_level = DEBUG
+
+   [production]
+   host = prod.example.com
+   port = 443
+   timeout = 60
+   retry_count = 5

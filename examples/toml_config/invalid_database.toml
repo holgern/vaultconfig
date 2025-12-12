@@ -1,0 +1,10 @@
+# Invalid database configuration
+# This configuration has validation errors:
+# - port is out of valid range (must be 1-65535)
+# - missing required field 'password'
+
+host = "localhost"
+port = 99999
+username = "admin"
+database = "myapp_db"
+ssl_enabled = false

@@ -1,0 +1,37 @@
+[app]
+name = "MyAwesomeApp"
+version = "1.0.0"
+environment = "production"
+
+[server]
+host = "0.0.0.0"
+port = 8080
+workers = 4
+timeout = 30
+
+[database]
+url = "postgresql://user:pass@localhost:5432/mydb"
+pool_size = 10
+max_overflow = 20
+pool_timeout = 30
+
+[cache]
+backend = "redis"
+url = "redis://localhost:6379/0"
+ttl = 3600
+
+[security]
+secret_key = "your-secret-key-here"
+allowed_hosts = [
+    "localhost",
+    "*.example.com",
+]
+cors_origins = [
+    "https://example.com",
+    "https://app.example.com",
+]
+
+[features]
+registration = true
+email_verification = true
+two_factor_auth = false

@@ -1,0 +1,26 @@
+string_value = "Hello, World!"
+integer_value = 42
+float_value = 3.14159
+boolean_true = true
+boolean_false = false
+array_integers = [
+    1,
+    2,
+    3,
+    4,
+    5,
+]
+array_strings = [
+    "apple",
+    "banana",
+    "cherry",
+]
+array_mixed = [
+    1,
+    "two",
+    3.0,
+    true,
+]
+
+[nested.level1.level2]
+deep_value = "Found me!"

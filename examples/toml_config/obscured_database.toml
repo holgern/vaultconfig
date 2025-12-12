@@ -1,0 +1,10 @@
+# Database configuration with obscured password
+# The password field is obscured (NOT encrypted - just obfuscated)
+# Anyone with access to vaultconfig can reveal it
+
+host = "db.example.com"
+port = 5432
+username = "dbuser"
+password = "647MdyXIW80RzH66xwqVxVQ7sFIeRyTK5_qU0ZiBEbkfqbjRVQ"
+database = "production_db"
+ssl_enabled = true

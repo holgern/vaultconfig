@@ -1,0 +1,48 @@
+# Nested YAML configuration
+# YAML supports nested structures and complex hierarchies
+
+database:
+  host: localhost
+  port: 5432
+  database: myapp
+  pool:
+    max_connections: 20
+    min_connections: 5
+    timeout: 30
+  ssl:
+    enabled: true
+    cert_path: /etc/ssl/certs/db-cert.pem
+    key_path: /etc/ssl/private/db-key.pem
+
+api:
+  base_url: https://api.example.com
+  timeout: 60
+  version: v1
+  rate_limit:
+    enabled: true
+    requests_per_minute: 100
+    burst_size: 20
+  authentication:
+    type: bearer
+    token: secret-api-token
+
+cache:
+  enabled: true
+  backend: redis
+  redis:
+    host: localhost
+    port: 6379
+    db: 0
+    password: ""
+
+logging:
+  level: INFO
+  format: json
+  handlers:
+    console: true
+    file: true
+    syslog: false
+  file:
+    path: /var/log/myapp.log
+    max_size_mb: 100
+    backup_count: 5

@@ -277,17 +277,31 @@ TOML (Default)
 INI
 ~~~
 
+INI format supports the DEFAULT section for shared values:
+
 .. code-block:: ini
 
    # database.ini
-   [main]
-   host = localhost
-   port = 5432
-   username = myuser
-   password = obscured-value-here
+   [DEFAULT]
+   ServerAliveInterval = 45
+   Compression = yes
+   ForwardX11 = yes
 
-   [nested]
-   key = value
+   [forge.example]
+   User = hg
+   # Inherits ServerAliveInterval, Compression, ForwardX11 from DEFAULT
+
+   [topsecret.server.example]
+   Port = 50022
+   ForwardX11 = no  # Overrides DEFAULT value
+   # Inherits ServerAliveInterval, Compression from DEFAULT
+
+**Key Features**:
+
+- Section names can contain dots (e.g., ``forge.example``)
+- Values in ``[DEFAULT]`` are inherited by all sections
+- Sections can override DEFAULT values
+- Option names preserve case by default
 
 YAML
 ~~~~

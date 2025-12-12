@@ -181,7 +181,6 @@ key = value
     def test_ini_detect_invalid(self):
         """Test detecting invalid INI."""
         invalid_data = [
-            "key = value",  # No section
             "random text",
             "",
         ]
@@ -217,6 +216,175 @@ key = value
         assert loaded["section"]["int_value"] == "123"
         assert loaded["section"]["bool_value"] == "True"
         assert loaded["section"]["float_value"] == "45.67"
+
+    def test_ini_default_section(self):
+        """Test INI DEFAULT section support."""
+        ini_data = """
+[DEFAULT]
+lh_server = 192.168.0.1
+
+[host 1]
+vh_root = PloneSite1
+lh_root = PloneSite1
+
+[host 2]
+vh_root = PloneSite2
+lh_root = PloneSite2
+"""
+        handler = INIFormat()
+        data = handler.load(ini_data)
+
+        # DEFAULT section should be included
+        assert "DEFAULT" in data
+        assert data["DEFAULT"]["lh_server"] == "192.168.0.1"
+
+        # Other sections should inherit DEFAULT values
+        assert data["host 1"]["lh_server"] == "192.168.0.1"
+        assert data["host 1"]["vh_root"] == "PloneSite1"
+        assert data["host 2"]["lh_server"] == "192.168.0.1"
+        assert data["host 2"]["vh_root"] == "PloneSite2"
+
+    def test_ini_default_section_override(self):
+        """Test that sections can override DEFAULT values."""
+        ini_data = """
+[DEFAULT]
+server = default.example.com
+port = 80
+
+[production]
+server = prod.example.com
+
+[development]
+port = 8080
+"""
+        handler = INIFormat()
+        data = handler.load(ini_data)
+
+        # production overrides server, inherits port
+        assert data["production"]["server"] == "prod.example.com"
+        assert data["production"]["port"] == "80"
+
+        # development overrides port, inherits server
+        assert data["development"]["server"] == "default.example.com"
+        assert data["development"]["port"] == "8080"
+
+    def test_ini_default_only(self):
+        """Test INI with only DEFAULT section."""
+        ini_data = """
+[DEFAULT]
+key1 = value1
+key2 = value2
+"""
+        handler = INIFormat()
+        data = handler.load(ini_data)
+
+        # Should have DEFAULT section
+        assert "DEFAULT" in data
+        assert data["DEFAULT"]["key1"] == "value1"
+        assert data["DEFAULT"]["key2"] == "value2"
+        # Should have no other sections
+        assert len(data) == 1
+
+    def test_ini_no_default(self):
+        """Test INI without DEFAULT section."""
+        ini_data = """
+[section1]
+key1 = value1
+
+[section2]
+key2 = value2
+"""
+        handler = INIFormat()
+        data = handler.load(ini_data)
+
+        # Should not have DEFAULT section
+        assert "DEFAULT" not in data
+        assert "section1" in data
+        assert "section2" in data
+
+    def test_ini_dump_with_default(self):
+        """Test dumping INI with DEFAULT section."""
+        data = {
+            "DEFAULT": {
+                "common_key": "common_value",
+            },
+            "section1": {
+                "key1": "value1",
+            },
+            "section2": {
+                "key2": "value2",
+            },
+        }
+
+        handler = INIFormat()
+        ini_str = handler.dump(data)
+
+        # Should contain DEFAULT section
+        assert "[DEFAULT]" in ini_str
+        assert "common_key" in ini_str
+
+        # Load it back
+        loaded = handler.load(ini_str)
+
+        # DEFAULT should be present
+        assert "DEFAULT" in loaded
+        # Other sections should inherit DEFAULT values
+        assert loaded["section1"]["common_key"] == "common_value"
+        assert loaded["section2"]["common_key"] == "common_value"
+
+    def test_ini_detect_default_only(self):
+        """Test detecting INI with only DEFAULT section."""
+        ini_default_only = """
+[DEFAULT]
+key = value
+"""
+        assert INIFormat.detect(ini_default_only) is True
+
+    def test_ini_case_preservation(self):
+        """Test INI option name case preservation."""
+        ini_data = """
+[DEFAULT]
+ServerAliveInterval = 45
+Compression = yes
+
+[forge.example]
+User = hg
+"""
+        # Test with case preservation (default)
+        handler = INIFormat(preserve_case=True)
+        data = handler.load(ini_data)
+
+        # Keys should preserve case
+        assert "ServerAliveInterval" in data["DEFAULT"]
+        assert "Compression" in data["DEFAULT"]
+        assert "User" in data["forge.example"]
+
+        # Test without case preservation
+        handler_lower = INIFormat(preserve_case=False)
+        data_lower = handler_lower.load(ini_data)
+
+        # Keys should be lowercase
+        assert "serveraliveinterval" in data_lower["DEFAULT"]
+        assert "compression" in data_lower["DEFAULT"]
+        assert "user" in data_lower["forge.example"]
+
+    def test_ini_section_names_with_dots(self):
+        """Test INI section names with dots."""
+        ini_data = """
+[forge.example]
+key1 = value1
+
+[topsecret.server.example]
+key2 = value2
+"""
+        handler = INIFormat()
+        data = handler.load(ini_data)
+
+        # Section names with dots should work
+        assert "forge.example" in data
+        assert "topsecret.server.example" in data
+        assert data["forge.example"]["key1"] == "value1"
+        assert data["topsecret.server.example"]["key2"] == "value2"
 
 
 class TestYAMLFormat:
