@@ -106,6 +106,7 @@ class ConfigEntry:
         name: str,
         data: dict[str, Any],
         sensitive_fields: set[str] | None = None,
+        obscurer: obscure.Obscurer | None = None,
     ) -> None:
         """Initialize config entry.
 
@@ -113,10 +114,13 @@ class ConfigEntry:
             name: Config entry name
             data: Configuration data
             sensitive_fields: Set of field names that are sensitive (will be obscured)
+            obscurer: Obscurer instance for password obscuring/revealing
+            (uses default if None)
         """
         self.name = name
         self._data = data
         self._sensitive_fields = sensitive_fields or set()
+        self._obscurer = obscurer if obscurer is not None else obscure.Obscurer()
 
     def get(self, key: str, default: Any = None) -> Any:
         """Get a configuration value, revealing obscured passwords if needed.
@@ -143,7 +147,7 @@ class ConfigEntry:
         # Reveal obscured passwords for sensitive fields
         if isinstance(value, str) and key in self._sensitive_fields:
             try:
-                return obscure.reveal(value)
+                return self._obscurer.reveal(value)
             except ValueError:
                 # Not obscured, return as-is
                 return value
@@ -168,9 +172,9 @@ class ConfigEntry:
                 result[key] = self._reveal_nested(value, key)
             elif isinstance(value, str):
                 # Try to reveal if it's a known sensitive field or looks obscured
-                if key in self._sensitive_fields or obscure.is_obscured(value):
+                if key in self._sensitive_fields or self._obscurer.is_obscured(value):
                     try:
-                        result[key] = obscure.reveal(value)
+                        result[key] = self._obscurer.reveal(value)
                     except ValueError:
                         result[key] = value
                 else:
@@ -197,9 +201,11 @@ class ConfigEntry:
                 result[key] = self._reveal_nested(value, full_key)
             elif isinstance(value, str):
                 # Try to reveal if it's a known sensitive field or looks obscured
-                if full_key in self._sensitive_fields or obscure.is_obscured(value):
+                if full_key in self._sensitive_fields or self._obscurer.is_obscured(
+                    value
+                ):
                     try:
-                        result[key] = obscure.reveal(value)
+                        result[key] = self._obscurer.reveal(value)
                     except ValueError:
                         result[key] = value
                 else:
@@ -218,6 +224,7 @@ class ConfigManager:
         format: str = "toml",
         schema: ConfigSchema | None = None,
         password: str | None = None,
+        obscurer: obscure.Obscurer | None = None,
     ) -> None:
         """Initialize configuration manager.
 
@@ -226,6 +233,7 @@ class ConfigManager:
             format: Config file format ('toml', 'ini', 'yaml')
             schema: Optional schema for validation
             password: Encryption password (if None, configs are not encrypted)
+            obscurer: Obscurer instance for password obscuring (uses default if None)
 
         Raises:
             FormatError: If format is not supported
@@ -233,6 +241,7 @@ class ConfigManager:
         self.config_dir = Path(config_dir).expanduser()
         self.schema = schema
         self._password = password
+        self._obscurer = obscurer if obscurer is not None else obscure.Obscurer()
         self._configs: dict[str, ConfigEntry] = {}
 
         # Get format handler
@@ -314,7 +323,9 @@ class ConfigManager:
         if self.schema:
             sensitive_fields = self.schema.get_sensitive_fields()
 
-        self._configs[name] = ConfigEntry(name, config_data, sensitive_fields)
+        self._configs[name] = ConfigEntry(
+            name, config_data, sensitive_fields, self._obscurer
+        )
         logger.debug(f"Loaded config '{name}' from {config_file}")
 
     def _save_config(self, name: str) -> None:
@@ -411,10 +422,12 @@ class ConfigManager:
             for field in sensitive_fields:
                 if field in config and isinstance(config[field], str):
                     # Check if already obscured
-                    if not obscure.is_obscured(config[field]):
-                        config[field] = obscure.obscure(config[field])
+                    if not self._obscurer.is_obscured(config[field]):
+                        config[field] = self._obscurer.obscure(config[field])
 
-        self._configs[name] = ConfigEntry(name, config, sensitive_fields)
+        self._configs[name] = ConfigEntry(
+            name, config, sensitive_fields, self._obscurer
+        )
         self._save_config(name)
 
         logger.info(f"Added config '{name}'")

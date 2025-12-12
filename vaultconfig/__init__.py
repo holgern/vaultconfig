@@ -22,6 +22,12 @@ from vaultconfig.exceptions import (
     SchemaValidationError,
     VaultConfigError,
 )
+from vaultconfig.obscure import (
+    Obscurer,
+    create_obscurer_from_bytes,
+    create_obscurer_from_hex,
+    create_obscurer_from_passphrase,
+)
 from vaultconfig.schema import ConfigSchema, FieldDef, create_simple_schema
 
 __version__ = "0.1.0"
@@ -32,6 +38,11 @@ __all__ = [
     "ConfigEntry",
     "ConfigSchema",
     "FieldDef",
+    # Obscurer classes and functions
+    "Obscurer",
+    "create_obscurer_from_hex",
+    "create_obscurer_from_passphrase",
+    "create_obscurer_from_bytes",
     # Functions
     "create_simple_schema",
     # Modules

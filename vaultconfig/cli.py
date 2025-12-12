@@ -2,6 +2,8 @@
 
 from __future__ import annotations
 
+import os
+import secrets
 import sys
 from pathlib import Path
 
@@ -205,6 +207,91 @@ def encrypt_check(config_dir: str, format: str | None) -> None:
         sys.exit(1)
 
 
+@main.group()
+def obscure() -> None:
+    """Manage password obscuring."""
+    pass
+
+
+@obscure.command(name="generate-key")
+@click.option(
+    "--output",
+    "-o",
+    type=click.Path(),
+    help="Output file path (prints to stdout if not specified)",
+)
+@click.option(
+    "--from-passphrase",
+    "-p",
+    is_flag=True,
+    help="Generate key from passphrase instead of random bytes",
+)
+def obscure_generate_key(output: str | None, from_passphrase: bool) -> None:
+    """Generate a new cipher key for password obscuring.
+
+    This generates a 32-byte (256-bit) AES key that can be used with vaultconfig
+    for custom password obscuring. The key is output as a 64-character hex string.
+
+    Examples:
+        # Generate random key and save to file
+        vaultconfig obscure generate-key -o ~/.myapp_cipher_key
+
+        # Generate from passphrase
+        vaultconfig obscure generate-key --from-passphrase
+
+        # Print to stdout
+        vaultconfig obscure generate-key
+    """
+    import hashlib
+
+    try:
+        if from_passphrase:
+            passphrase = click.prompt("Enter passphrase", hide_input=True)
+            confirm = click.prompt("Confirm passphrase", hide_input=True)
+
+            if passphrase != confirm:
+                console.print("[red]Error:[/red] Passphrases do not match")
+                sys.exit(1)
+
+            # Generate key from passphrase using SHA-256
+            key_bytes = hashlib.sha256(passphrase.encode("utf-8")).digest()
+        else:
+            # Generate random 32-byte key
+            key_bytes = secrets.token_bytes(32)
+
+        # Convert to hex string
+        hex_key = key_bytes.hex()
+
+        if output:
+            output_path = Path(output).expanduser()
+            output_path.parent.mkdir(parents=True, exist_ok=True)
+
+            with open(output_path, "w") as f:
+                f.write(hex_key)
+
+            # Set secure permissions (owner read/write only)
+            os.chmod(output_path, 0o600)
+
+            console.print(f"[green]✓[/green] Cipher key saved to: {output}")
+            console.print("\nTo use this key, set the environment variable:")
+            console.print(f"  export VAULTCONFIG_CIPHER_KEY_FILE={output}")
+            console.print("\nOr:")
+            console.print(f"  export VAULTCONFIG_CIPHER_KEY=$(cat {output})")
+        else:
+            # Print to stdout
+            console.print(hex_key)
+            # Print warning to stderr using click.echo
+            click.echo(
+                "\nNote: Save this key securely! "
+                "You'll need it to reveal obscured passwords.",
+                err=True,
+            )
+
+    except Exception as e:
+        console.print(f"[red]Error:[/red] {e}")
+        sys.exit(1)
+
+
 def _get_manager(
     config_dir: str, format: str | None = None, ask_password: bool = True
 ) -> ConfigManager:
@@ -218,7 +305,7 @@ def _get_manager(
     Returns:
         ConfigManager instance
     """
-    from vaultconfig import crypt
+    from vaultconfig import crypt, obscure
 
     config_path = Path(config_dir)
 
@@ -239,7 +326,32 @@ def _get_manager(
                     password = crypt.get_password()
                     break
 
-    return ConfigManager(config_path, format=format, password=password)
+    # Load custom cipher key if provided
+    obscurer = None
+    cipher_key_hex = os.environ.get("VAULTCONFIG_CIPHER_KEY")
+    cipher_key_file = os.environ.get("VAULTCONFIG_CIPHER_KEY_FILE")
+
+    if cipher_key_file:
+        try:
+            key_path = Path(cipher_key_file).expanduser()
+            with open(key_path) as f:
+                cipher_key_hex = f.read().strip()
+        except Exception as e:
+            console.print(
+                f"[yellow]Warning:[/yellow] Failed to read cipher key file: {e}"
+            )
+
+    if cipher_key_hex:
+        try:
+            obscurer = obscure.create_obscurer_from_hex(cipher_key_hex)
+        except Exception as e:
+            console.print(
+                f"[yellow]Warning:[/yellow] Invalid cipher key, using default: {e}"
+            )
+
+    return ConfigManager(
+        config_path, format=format, password=password, obscurer=obscurer
+    )
 
 
 def _detect_format(config_dir: Path) -> str:

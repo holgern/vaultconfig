@@ -5,6 +5,7 @@ This example demonstrates:
 1. Loading and reading valid TOML configuration
 2. Handling configuration with validation errors
 3. Using obscured passwords for sensitive fields
+4. Using custom cipher keys for better security
 """
 
 import sys
@@ -12,10 +13,14 @@ from pathlib import Path
 
 from pydantic import BaseModel, Field
 
+from vaultconfig import create_obscurer_from_passphrase
 from vaultconfig.config import ConfigManager
 from vaultconfig.exceptions import SchemaValidationError
-from vaultconfig.obscure import obscure, reveal
 from vaultconfig.schema import ConfigSchema
+
+# Create a unique cipher key for this example/application
+# In production, you'd load this from secure storage (env var, key file, etc.)
+TOML_EXAMPLE_OBSCURER = create_obscurer_from_passphrase("VaultConfig-TOML-Example-2024")
 
 
 class DatabaseConfig(BaseModel):
@@ -54,6 +59,7 @@ def example_valid_config():
         format="toml",
         schema=schema,
         password=None,  # No encryption for this example
+        obscurer=TOML_EXAMPLE_OBSCURER,  # Use custom cipher key
     )
 
     # Load the valid config
@@ -102,6 +108,7 @@ def example_invalid_config():
         format="toml",
         schema=None,
         password=None,
+        obscurer=TOML_EXAMPLE_OBSCURER,  # Use custom cipher key
     )
 
     # Load the config without validation
@@ -151,6 +158,7 @@ def example_obscured_password():
         format="toml",
         schema=schema,
         password=None,
+        obscurer=TOML_EXAMPLE_OBSCURER,  # Use custom cipher key
     )
 
     # Load config with obscured password
@@ -172,16 +180,20 @@ def example_obscured_password():
                 else:
                     print(f"  {key}: {value}")
 
-            # Demonstrate obscuring a new password
-            print("\nObscuring a new password:")
+            # Demonstrate obscuring a new password with custom key
+            print("\nObscuring a new password with custom cipher key:")
             new_password = "new_secret_password_123"
-            obscured = obscure(new_password)
-            revealed_again = reveal(obscured)
+            obscured = TOML_EXAMPLE_OBSCURER.obscure(new_password)
+            revealed_again = TOML_EXAMPLE_OBSCURER.reveal(obscured)
 
             print(f"  Original:  {new_password}")
             print(f"  Obscured:  {obscured}")
             print(f"  Revealed:  {revealed_again}")
             print(f"  Match:     {new_password == revealed_again}")
+
+            # Show that the default key won't work with custom obscured password
+            print("\n  Note: This password was obscured with a custom cipher key.")
+            print("  It cannot be revealed with the default key used by other apps.")
         else:
             print("✗ Configuration 'obscured_database' not found")
 
@@ -199,6 +211,7 @@ def example_nested_config():
         format="toml",
         schema=None,
         password=None,
+        obscurer=TOML_EXAMPLE_OBSCURER,  # Use custom cipher key
     )
 
     # Load nested config

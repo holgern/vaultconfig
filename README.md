@@ -202,6 +202,81 @@ revealed = obscure.reveal(obscured)  # Returns "my_password"
 **IMPORTANT**: This is obfuscation, not encryption! Anyone with access to vaultconfig
 can decrypt obscured passwords. Use config file encryption for real security.
 
+### Using Custom Cipher Keys
+
+By default, vaultconfig uses a hardcoded cipher key for password obscuring. While this
+prevents casual viewing, anyone with access to the vaultconfig library can reveal these
+passwords. For better protection, you can use your own custom cipher key:
+
+#### Python API
+
+```python
+from vaultconfig import ConfigManager, create_obscurer_from_passphrase
+import secrets
+
+# Option 1: Generate a random key (most secure)
+cipher_key = secrets.token_bytes(32)
+from vaultconfig import Obscurer
+obscurer = Obscurer(cipher_key=cipher_key)
+
+# Option 2: Use a passphrase (easiest - recommended for most apps)
+obscurer = create_obscurer_from_passphrase("MyApp-Unique-Secret-2024")
+
+# Option 3: Use a hex string (good for storing in env vars/files)
+from vaultconfig import create_obscurer_from_hex
+obscurer = create_obscurer_from_hex("a73b9f2c...")  # 64 hex chars
+
+# Use with ConfigManager
+manager = ConfigManager(
+    config_dir=Path("./myapp-config"),
+    obscurer=obscurer,  # All password obscuring uses YOUR key
+)
+
+# Everything else works the same
+manager.add_config("db", {"password": "secret"})
+config = manager.get_config("db")
+password = config.get("password")  # Revealed automatically
+```
+
+#### CLI Usage
+
+```bash
+# Generate a cipher key
+vaultconfig obscure generate-key > ~/.myapp_cipher_key
+
+# Generate from passphrase (reproducible)
+vaultconfig obscure generate-key --from-passphrase
+
+# Use with environment variable
+export VAULTCONFIG_CIPHER_KEY=$(cat ~/.myapp_cipher_key)
+vaultconfig list ./myapp-config
+
+# Or point to key file
+export VAULTCONFIG_CIPHER_KEY_FILE=~/.myapp_cipher_key
+vaultconfig show ./myapp-config database --reveal
+```
+
+#### Key Management Best Practices
+
+1. **Generate Once**: Create your key once and store it securely
+2. **Secure Storage**: Keep the key in a secure location (not in git!)
+3. **Environment Variables**: Use env vars or key files for deployment
+4. **Backup**: Keep a backup of your key - without it, passwords cannot be revealed
+5. **App-Specific**: Use different keys for different applications
+6. **Still Not Encryption**: Custom keys improve security but this is still obfuscation
+
+**Benefits of Custom Keys**:
+
+- Other apps/users cannot reveal your obscured passwords without your specific key
+- Adds an application-specific layer of protection
+- Easy to implement with passphrases or random keys
+
+**Limitations**:
+
+- Still not real encryption - anyone with your key can reveal passwords
+- Lost key = lost ability to reveal passwords
+- For real security, use config file encryption (see below)
+
 ### Config File Encryption
 
 - **Purpose**: Secure encryption of entire config files
@@ -271,6 +346,8 @@ nested:
   manager)
 - `VAULTCONFIG_PASSWORD_CHANGE`: Set to "1" when changing password (used by password
   command)
+- `VAULTCONFIG_CIPHER_KEY`: Hex-encoded custom cipher key (64 hex characters)
+- `VAULTCONFIG_CIPHER_KEY_FILE`: Path to file containing hex-encoded cipher key
 
 ## Security Considerations
 
@@ -280,6 +357,10 @@ nested:
    - Anyone with code access can reveal passwords
    - Use for convenience, not security
    - A warning is logged on first use
+   - **Custom Cipher Keys**: Using custom keys improves security but is still
+     obfuscation
+   - Custom keys prevent other apps from revealing your passwords
+   - Lost custom key = lost ability to reveal passwords
 
 2. **Config File Encryption**:
 
@@ -305,6 +386,9 @@ nested:
    - Never commit encrypted configs with weak passwords
    - Keep PyYAML updated (>= 6.0 for security fixes)
    - Avoid using shell=True with password commands (use proper escaping)
+   - **Use custom cipher keys** for password obscuring (better than default)
+   - Generate cipher keys with `vaultconfig obscure generate-key`
+   - Store cipher keys securely (env vars, key files, not in code/git)
 
 ## Integration Examples
 
