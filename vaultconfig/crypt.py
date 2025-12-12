@@ -17,6 +17,7 @@ from __future__ import annotations
 import base64
 import getpass
 import os
+import platform
 import shlex
 import subprocess
 import sys
@@ -283,8 +284,10 @@ def get_password(prompt: str = "Config password: ", changing: bool = False) -> s
 
             # SECURITY: Use shlex.split() to safely parse command
             # This prevents shell injection while still allowing complex commands
-            # Note: Always use posix=True (default) to properly handle quoted arguments
-            cmd_args = shlex.split(password_cmd)
+            # Note: Use posix=False on Windows to handle Windows paths correctly
+            # On Unix, use posix=True (default) to properly handle quoted arguments
+            posix_mode = platform.system() != "Windows"
+            cmd_args = shlex.split(password_cmd, posix=posix_mode)
 
             result = subprocess.run(
                 cmd_args,
