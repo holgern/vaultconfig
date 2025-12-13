@@ -23,7 +23,7 @@ def test_cli_main_help(cli_runner):
 def test_cli_init(cli_runner, temp_dir):
     """Test init command."""
     config_dir = temp_dir / "test_config"
-    result = cli_runner.invoke(main, ["init", str(config_dir)])
+    result = cli_runner.invoke(main, ["init", "-d", str(config_dir)])
     assert result.exit_code == 0
     assert config_dir.exists()
     assert "Initialized" in result.output
@@ -32,7 +32,7 @@ def test_cli_init(cli_runner, temp_dir):
 def test_cli_init_with_format(cli_runner, temp_dir):
     """Test init command with specific format."""
     config_dir = temp_dir / "test_config"
-    result = cli_runner.invoke(main, ["init", str(config_dir), "-f", "ini"])
+    result = cli_runner.invoke(main, ["init", "-d", str(config_dir), "-f", "ini"])
     assert result.exit_code == 0
     assert "Format: ini" in result.output
 
@@ -41,7 +41,7 @@ def test_cli_init_with_encryption(cli_runner, temp_dir):
     """Test init command with encryption."""
     config_dir = temp_dir / "test_config"
     result = cli_runner.invoke(
-        main, ["init", str(config_dir), "-e"], input="password123\npassword123\n"
+        main, ["init", "-d", str(config_dir), "-e"], input="password123\npassword123\n"
     )
     assert result.exit_code == 0
     assert "Encrypted: Yes" in result.output
@@ -51,7 +51,7 @@ def test_cli_init_password_mismatch(cli_runner, temp_dir):
     """Test init with mismatched passwords."""
     config_dir = temp_dir / "test_config"
     result = cli_runner.invoke(
-        main, ["init", str(config_dir), "-e"], input="password123\nwrong\n"
+        main, ["init", "-d", str(config_dir), "-e"], input="password123\nwrong\n"
     )
     assert result.exit_code == 1
     assert "do not match" in result.output
@@ -64,7 +64,7 @@ def test_cli_init_existing_directory(cli_runner, config_dir):
     manager.add_config("test", {"key": "value"}, obscure_passwords=False)
 
     # Try to init again - should warn
-    result = cli_runner.invoke(main, ["init", str(config_dir)], input="n\n")
+    result = cli_runner.invoke(main, ["init", "-d", str(config_dir)], input="n\n")
     assert result.exit_code == 0
     # Check for warning message (may contain line breaks)
     assert "already" in result.output and "exists" in result.output
@@ -73,7 +73,7 @@ def test_cli_init_existing_directory(cli_runner, config_dir):
 
 def test_cli_list_empty(cli_runner, config_dir):
     """Test list command with no configs."""
-    result = cli_runner.invoke(main, ["list", str(config_dir)])
+    result = cli_runner.invoke(main, ["list", "-d", str(config_dir)])
     assert result.exit_code == 0
     assert "No configurations found" in result.output
 
@@ -84,7 +84,7 @@ def test_cli_list_with_configs(cli_runner, config_dir):
     manager.add_config("test1", {"key": "value1"}, obscure_passwords=False)
     manager.add_config("test2", {"key": "value2"}, obscure_passwords=False)
 
-    result = cli_runner.invoke(main, ["list", str(config_dir)])
+    result = cli_runner.invoke(main, ["list", "-d", str(config_dir)])
     assert result.exit_code == 0
     assert "test1" in result.output
     assert "test2" in result.output
@@ -96,7 +96,7 @@ def test_cli_list_encrypted(cli_runner, config_dir):
     manager.add_config("test", {"key": "value"}, obscure_passwords=False)
 
     result = cli_runner.invoke(
-        main, ["list", str(config_dir)], env={"VAULTCONFIG_PASSWORD": "secret"}
+        main, ["list", "-d", str(config_dir)], env={"VAULTCONFIG_PASSWORD": "secret"}
     )
     assert result.exit_code == 0
     assert "test" in result.output
@@ -109,7 +109,7 @@ def test_cli_show_config(cli_runner, config_dir):
         "test", {"host": "localhost", "port": 8080}, obscure_passwords=False
     )
 
-    result = cli_runner.invoke(main, ["show", str(config_dir), "test"])
+    result = cli_runner.invoke(main, ["show", "test", "-d", str(config_dir)])
     assert result.exit_code == 0
     assert "localhost" in result.output
     assert "8080" in result.output
@@ -117,7 +117,7 @@ def test_cli_show_config(cli_runner, config_dir):
 
 def test_cli_show_config_not_found(cli_runner, config_dir):
     """Test show command with non-existent config."""
-    result = cli_runner.invoke(main, ["show", str(config_dir), "nonexistent"])
+    result = cli_runner.invoke(main, ["show", "nonexistent", "-d", str(config_dir)])
     assert result.exit_code == 1
     assert "not found" in result.output
 
@@ -135,7 +135,7 @@ def test_cli_show_with_reveal(cli_runner, config_dir, sample_schema):
         },
     )
 
-    result = cli_runner.invoke(main, ["show", str(config_dir), "test", "-r"])
+    result = cli_runner.invoke(main, ["show", "test", "-d", str(config_dir), "-r"])
     assert result.exit_code == 0
     assert "secret" in result.output
 
@@ -153,7 +153,7 @@ def test_cli_show_without_reveal(cli_runner, config_dir, sample_schema):
         },
     )
 
-    result = cli_runner.invoke(main, ["show", str(config_dir), "test"])
+    result = cli_runner.invoke(main, ["show", "test", "-d", str(config_dir)])
     assert result.exit_code == 0
     # Should show a note about --reveal
     assert "--reveal" in result.output
@@ -164,7 +164,9 @@ def test_cli_delete_config(cli_runner, config_dir):
     manager = ConfigManager(config_dir)
     manager.add_config("test", {"key": "value"}, obscure_passwords=False)
 
-    result = cli_runner.invoke(main, ["delete", str(config_dir), "test"], input="y\n")
+    result = cli_runner.invoke(
+        main, ["delete", "test", "-d", str(config_dir)], input="y\n"
+    )
     assert result.exit_code == 0
     assert "Deleted" in result.output
 
@@ -176,7 +178,7 @@ def test_cli_delete_config(cli_runner, config_dir):
 def test_cli_delete_config_not_found(cli_runner, config_dir):
     """Test delete command with non-existent config."""
     result = cli_runner.invoke(
-        main, ["delete", str(config_dir), "nonexistent"], input="y\n"
+        main, ["delete", "nonexistent", "-d", str(config_dir)], input="y\n"
     )
     assert result.exit_code == 1
     assert "not found" in result.output
@@ -187,7 +189,11 @@ def test_cli_delete_config_cancel(cli_runner, config_dir):
     manager = ConfigManager(config_dir)
     manager.add_config("test", {"key": "value"}, obscure_passwords=False)
 
-    result = cli_runner.invoke(main, ["delete", str(config_dir), "test"], input="n\n")
+    result = cli_runner.invoke(
+        main,
+        ["delete", "test", "-d", str(config_dir)],
+        input="n\n",
+    )
     # Should abort
     assert result.exit_code == 1
 
@@ -203,7 +209,7 @@ def test_cli_encrypt_set(cli_runner, config_dir):
 
     result = cli_runner.invoke(
         main,
-        ["encrypt", "set", str(config_dir)],
+        ["encrypt", "set", "-d", str(config_dir)],
         input="newpassword\nnewpassword\n",
     )
     assert result.exit_code == 0
@@ -223,7 +229,7 @@ def test_cli_encrypt_set_password_mismatch(cli_runner, config_dir):
 
     result = cli_runner.invoke(
         main,
-        ["encrypt", "set", str(config_dir)],
+        ["encrypt", "set", "-d", str(config_dir)],
         input="password1\npassword2\n",
     )
     assert result.exit_code == 1
@@ -237,7 +243,7 @@ def test_cli_encrypt_remove(cli_runner, config_dir):
 
     result = cli_runner.invoke(
         main,
-        ["encrypt", "remove", str(config_dir)],
+        ["encrypt", "remove", "-d", str(config_dir)],
         input="y\n",
         env={"VAULTCONFIG_PASSWORD": "secret"},
     )
@@ -259,7 +265,7 @@ def test_cli_encrypt_remove_cancel(cli_runner, config_dir):
 
     result = cli_runner.invoke(
         main,
-        ["encrypt", "remove", str(config_dir)],
+        ["encrypt", "remove", "-d", str(config_dir)],
         input="n\n",
         env={"VAULTCONFIG_PASSWORD": "secret"},
     )
@@ -272,7 +278,7 @@ def test_cli_encrypt_check_encrypted(cli_runner, config_dir):
     manager = ConfigManager(config_dir, password="secret")
     manager.add_config("test", {"key": "value"}, obscure_passwords=False)
 
-    result = cli_runner.invoke(main, ["encrypt", "check", str(config_dir)])
+    result = cli_runner.invoke(main, ["encrypt", "check", "-d", str(config_dir)])
     assert result.exit_code == 0
     assert "NOT encrypted" in result.output  # Manager created without password
 
@@ -282,7 +288,7 @@ def test_cli_encrypt_check_not_encrypted(cli_runner, config_dir):
     manager = ConfigManager(config_dir)
     manager.add_config("test", {"key": "value"}, obscure_passwords=False)
 
-    result = cli_runner.invoke(main, ["encrypt", "check", str(config_dir)])
+    result = cli_runner.invoke(main, ["encrypt", "check", "-d", str(config_dir)])
     assert result.exit_code == 0
     assert "NOT encrypted" in result.output
 
@@ -308,7 +314,7 @@ def test_cli_format_autodetect(cli_runner, temp_dir):
     manager.add_config("test", {"key": "value"}, obscure_passwords=False)
 
     # Should autodetect yaml format
-    result = cli_runner.invoke(main, ["list", str(config_dir)])
+    result = cli_runner.invoke(main, ["list", "-d", str(config_dir)])
     assert result.exit_code == 0
     assert "test" in result.output
 
@@ -335,7 +341,7 @@ def test_cli_nested_config_display(cli_runner, config_dir):
         obscure_passwords=False,
     )
 
-    result = cli_runner.invoke(main, ["show", str(config_dir), "test"])
+    result = cli_runner.invoke(main, ["show", "test", "-d", str(config_dir)])
     assert result.exit_code == 0
     assert "database" in result.output
     assert "localhost" in result.output

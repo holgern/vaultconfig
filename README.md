@@ -40,29 +40,185 @@ pip install vaultconfig[dev]
 
 ### Command Line Usage
 
+The CLI provides complete configuration management without requiring Python programming.
+
+#### Default Config Directory
+
+VaultConfig uses a platform-specific default config directory so you don't need to
+specify it every time:
+
+- **Linux/macOS**: `~/.config/vaultconfig`
+- **Windows**: `%APPDATA%\vaultconfig`
+
+You can override this with:
+
+- `--config-dir` (or `-d`) option on any command
+- `VAULTCONFIG_DIR` environment variable
+
 ```bash
-# Initialize a new config directory
-vaultconfig init ./myapp-config --format toml
+# Use default directory
+vaultconfig init
+vaultconfig set database host=localhost --create
+
+# Use custom directory
+vaultconfig init -d ./myapp-config
+vaultconfig set -d ./myapp-config database host=localhost --create
+
+# Or set environment variable
+export VAULTCONFIG_DIR=./myapp-config
+vaultconfig list
+```
+
+#### Initialization
+
+```bash
+# Initialize default config directory
+vaultconfig init --format toml
 
 # Initialize with encryption
-vaultconfig init ./myapp-config --format toml --encrypt
+vaultconfig init --encrypt
 
-# List all configurations
-vaultconfig list ./myapp-config
+# Initialize custom directory
+vaultconfig init -d ./myapp-config --format toml
+```
 
-# Show a configuration
-vaultconfig show ./myapp-config myconfig
+#### Creating & Updating Configs
+
+```bash
+# Create a configuration interactively (uses default directory)
+vaultconfig create database
+# Prompts for key-value pairs
+
+# Create from a file
+vaultconfig create database --from-file config.json
+
+# Set individual values
+vaultconfig set database host=localhost port=5432
+
+# Set with automatic creation
+vaultconfig set newconfig key=value --create
+
+# Set obscured password
+vaultconfig set database password=secret --obscure
+
+# Remove keys
+vaultconfig unset database old_key
+
+# All commands work with custom directories too
+vaultconfig set -d ./myapp-config database host=localhost
+```
+
+#### Reading Configs
+
+```bash
+# List all configurations (table format, uses default directory)
+vaultconfig list
+
+# List as JSON
+vaultconfig list --output json
+
+# List as plain names
+vaultconfig list --output plain
+
+# Show a configuration (pretty format)
+vaultconfig show database
 
 # Show with revealed passwords
-vaultconfig show ./myapp-config myconfig --reveal
+vaultconfig show database --reveal
 
+# Show as JSON
+vaultconfig show database --output json
+
+# Get a specific value
+vaultconfig get database host
+
+# Get with reveal (for obscured values)
+vaultconfig get database password --reveal
+```
+
+#### Import/Export
+
+```bash
+# Export to JSON
+vaultconfig export database -e json -o database.json
+
+# Export with revealed passwords
+vaultconfig export database -e json --reveal
+
+# Export to YAML
+vaultconfig export database -e yaml
+
+# Export to stdout
+vaultconfig export database -e json
+
+# Import from file
+vaultconfig import database --from-file database.json
+
+# Import with overwrite
+vaultconfig import database --from-file config.yaml --overwrite
+```
+
+#### Environment Variables
+
+```bash
+# Export as environment variables
+vaultconfig export-env database --prefix DB_
+
+# Use in shell
+eval $(vaultconfig export-env database --prefix DB_ --reveal)
+echo $DB_HOST  # localhost
+```
+
+#### Copy & Rename
+
+```bash
+# Copy a configuration
+vaultconfig copy database database-backup
+
+# Rename a configuration
+vaultconfig rename database database-prod
+```
+
+#### Schema Validation
+
+```bash
+# Create a schema file (schema.yaml)
+cat > schema.yaml <<EOF
+fields:
+  host:
+    type: str
+    default: localhost
+  port:
+    type: int
+    default: 5432
+  password:
+    type: str
+    sensitive: true
+    required: true
+EOF
+
+# Validate configuration
+vaultconfig validate database --schema schema.yaml
+```
+
+#### Encryption Management
+
+```bash
+# Set/change password
+vaultconfig encrypt set ./myapp-config
+
+# Remove encryption
+vaultconfig encrypt remove ./myapp-config
+
+# Check encryption status
+vaultconfig encrypt check ./myapp-config
+```
+
+#### Deletion
+
+```bash
 # Delete a configuration
-vaultconfig delete ./myapp-config myconfig
-
-# Manage encryption
-vaultconfig encrypt set ./myapp-config        # Set/change password
-vaultconfig encrypt remove ./myapp-config     # Remove encryption
-vaultconfig encrypt check ./myapp-config      # Check encryption status
+vaultconfig delete myconfig
 ```
 
 ### Python API Usage
@@ -253,7 +409,7 @@ vaultconfig list ./myapp-config
 
 # Or point to key file
 export VAULTCONFIG_CIPHER_KEY_FILE=~/.myapp_cipher_key
-vaultconfig show ./myapp-config database --reveal
+vaultconfig show database --reveal
 ```
 
 #### Key Management Best Practices
