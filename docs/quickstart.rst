@@ -286,6 +286,31 @@ Manage Encryption
    # Check custom directory
    vaultconfig encrypt check -d ./myapp-config
 
+Run Commands with Config
+~~~~~~~~~~~~~~~~~~~~~~~~~
+
+Load a configuration and run a command with config values as environment variables:
+
+.. code-block:: bash
+
+   # Run a Python script with database config (uses default directory)
+   vaultconfig run database python app.py
+
+   # Run with custom prefix
+   vaultconfig run database --prefix DB_ python manage.py migrate
+
+   # Run with revealed passwords
+   vaultconfig run database --reveal python deploy.py
+
+   # Run from custom directory
+   vaultconfig run -d ./myapp-config prod-db python app.py
+
+   # Run tests with test environment
+   vaultconfig run test-env pytest tests/
+
+This is useful for running applications that expect configuration in environment
+variables without needing to manually export them.
+
 Configuration Formats
 ---------------------
 

@@ -1060,6 +1060,126 @@ def export_env_command(
         sys.exit(1)
 
 
+@main.command(name="run", context_settings={"ignore_unknown_options": True})
+@click.argument("name", required=True)
+@click.argument("commandline", nargs=-1, type=click.UNPROCESSED, required=True)
+@click.option(
+    "--config-dir",
+    "-d",
+    type=click.Path(),
+    help="Config directory (uses default if not specified)",
+)
+@click.option("--format", "-f", help="Config format")
+@click.option("--prefix", "-p", default="", help="Environment variable prefix")
+@click.option("--reveal", "-r", is_flag=True, help="Reveal obscured passwords")
+@click.option(
+    "--uppercase", "-u", is_flag=True, default=True, help="Convert keys to uppercase"
+)
+@click.option(
+    "--override/--no-override",
+    default=True,
+    help="Override existing environment variables",
+)
+def run_command(
+    name: str,
+    commandline: tuple[str, ...],
+    config_dir: str | None,
+    format: str | None,
+    prefix: str,
+    reveal: bool,
+    uppercase: bool,
+    override: bool,
+) -> None:
+    """Run a command with configuration loaded as environment variables.
+
+    This loads a configuration and runs a command with the config values
+    set as environment variables. Similar to 'dotenv run' but for vaultconfig.
+
+    Uses default config directory if not specified.
+
+    Examples:
+        # Run a script with database config
+        vaultconfig run database python manage.py migrate
+
+        # Run with custom prefix
+        vaultconfig run database --prefix DB_ ./start-server.sh
+
+        # Run with revealed passwords
+        vaultconfig run database --reveal env | grep PASSWORD
+
+        # Don't override existing env vars
+        vaultconfig run database --no-override python script.py
+    """
+    try:
+        config_path = _get_config_dir(config_dir)
+        if not config_path.exists():
+            console.print(
+                f"[red]Error:[/red] Config directory not found: {config_path}"
+            )
+            sys.exit(1)
+
+        manager = _get_manager(str(config_path), format)
+        config = manager.get_config(name)
+
+        if not config:
+            console.print(f"[red]Error:[/red] Config '{name}' not found")
+            sys.exit(1)
+
+        # Get configuration data
+        data = config.get_all(reveal_secrets=reveal)
+
+        # Flatten nested dictionaries
+        flat_data = _flatten_dict(data)
+
+        # Build environment variables dict
+        env_vars = {}
+        for key, value in flat_data.items():
+            # Convert key to env var format
+            env_key = key.replace(".", "_")
+            if uppercase:
+                env_key = env_key.upper()
+            env_key = prefix + env_key
+
+            # Only add if override is True or var doesn't exist
+            if override or env_key not in os.environ:
+                env_vars[env_key] = str(value)
+
+        if not commandline:
+            console.print("[red]Error:[/red] No command given")
+            sys.exit(1)
+
+        # Run the command with environment variables
+        _run_command_with_env(list(commandline), env_vars)
+
+    except VaultConfigError as e:
+        console.print(f"[red]Error:[/red] {e}")
+        sys.exit(1)
+
+
+def _run_command_with_env(command: list[str], env: dict[str, str]) -> None:
+    """Execute a command with additional environment variables.
+
+    Args:
+        command: Command and arguments to execute
+        env: Additional environment variables to add
+
+    This function replaces the current process with the command.
+    """
+    import subprocess
+
+    # Copy current environment and add new variables
+    cmd_env = os.environ.copy()
+    cmd_env.update(env)
+
+    # Use subprocess instead of execvpe for better test compatibility
+    # and consistent behavior across platforms
+    p = subprocess.Popen(
+        command, universal_newlines=True, bufsize=0, shell=False, env=cmd_env
+    )
+    p.communicate()
+    sys.exit(p.returncode)
+
+
 @main.command(name="encrypt-file")
 @click.argument("name", required=True)
 @click.option(

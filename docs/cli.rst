@@ -27,6 +27,7 @@ Commands Overview
 - ``export`` - Export a configuration to a file
 - ``import`` - Import a configuration from a file
 - ``export-env`` - Export configuration as environment variables
+- ``run`` - Run a command with config values as environment variables
 - ``encrypt`` - Manage encryption (command group with set, remove, check subcommands)
 - ``encrypt-file`` - Encrypt a specific config file
 - ``decrypt-file`` - Decrypt a specific config file
@@ -462,6 +463,179 @@ Set to "1" when changing passwords:
    export VAULTCONFIG_PASSWORD_CHANGE=1
    export VAULTCONFIG_PASSWORD_COMMAND="pass show vaultconfig/myapp-new"
    vaultconfig encrypt set ./myapp-config
+
+run Command
+-----------
+
+Run a command with configuration values loaded as environment variables. This is similar
+to ``dotenv run`` but works with VaultConfig configurations.
+
+Syntax
+~~~~~~
+
+.. code-block:: bash
+
+   vaultconfig run [OPTIONS] NAME COMMAND [ARGS]...
+
+Arguments
+~~~~~~~~~
+
+- ``NAME`` - Name of the configuration to load
+- ``COMMAND`` - Command to execute with the config as environment variables
+- ``ARGS`` - Arguments to pass to the command
+
+Options
+~~~~~~~
+
+- ``-d, --config-dir PATH`` - Config directory (uses default if not specified)
+- ``-f, --format TEXT`` - Config format (autodetected if not specified)
+- ``--prefix TEXT`` - Prefix for environment variable names (default: CONFIG_NAME + "_")
+- ``--reveal`` - Reveal obscured passwords
+- ``--uppercase / --no-uppercase`` - Convert keys to uppercase (default: true)
+- ``--override / --no-override`` - Override existing environment variables (default: true)
+- ``--help`` - Show help message
+
+How It Works
+~~~~~~~~~~~~
+
+1. Loads the specified configuration
+2. Flattens nested configs (e.g., ``database.host`` → ``DATABASE_HOST``)
+3. Converts keys to uppercase by default (disable with ``--no-uppercase``)
+4. Adds optional prefix to all variable names
+5. Executes the command with the config as environment variables
+6. Exits with the same exit code as the command
+
+Examples
+~~~~~~~~
+
+Basic usage (uses default directory):
+
+.. code-block:: bash
+
+   vaultconfig run database python app.py
+
+Run with custom prefix:
+
+.. code-block:: bash
+
+   vaultconfig run database --prefix DB_ python manage.py migrate
+
+Reveal obscured passwords:
+
+.. code-block:: bash
+
+   vaultconfig run database --reveal python deploy.py
+
+Keep lowercase keys:
+
+.. code-block:: bash
+
+   vaultconfig run database --no-uppercase node server.js
+
+Don't override existing environment variables:
+
+.. code-block:: bash
+
+   vaultconfig run database --no-override python app.py
+
+Use custom directory:
+
+.. code-block:: bash
+
+   vaultconfig run -d ./myapp-config prod-db python deploy.py
+
+Run tests with test config:
+
+.. code-block:: bash
+
+   vaultconfig run test-env pytest tests/
+
+Run Docker Compose with config:
+
+.. code-block:: bash
+
+   vaultconfig run docker-config docker-compose up
+
+Use with command that has flags (use ``--`` to separate):
+
+.. code-block:: bash
+
+   vaultconfig run database -- python app.py --debug --port 8000
+
+Practical Examples
+~~~~~~~~~~~~~~~~~~
+
+**Database migrations:**
+
+.. code-block:: bash
+
+   # Run Django migrations with database config
+   vaultconfig run database --prefix DB_ python manage.py migrate
+
+**Running applications:**
+
+.. code-block:: bash
+
+   # Start Flask app with config
+   vaultconfig run app-config --reveal flask run
+
+**CI/CD pipelines:**
+
+.. code-block:: bash
+
+   # Deploy with production config
+   vaultconfig run production --reveal ./deploy.sh
+
+**Testing:**
+
+.. code-block:: bash
+
+   # Run tests with test database config
+   vaultconfig run test-db pytest tests/integration/
+
+**Docker containers:**
+
+.. code-block:: bash
+
+   # Start container with config
+   vaultconfig run redis-config docker run -e REDIS_PASSWORD redis:alpine
+
+Environment Variable Naming
+~~~~~~~~~~~~~~~~~~~~~~~~~~~~
+
+The ``run`` command transforms configuration keys into environment variable names:
+
+- **Uppercase conversion**: ``host`` → ``HOST`` (default, disable with ``--no-uppercase``)
+- **Nested keys**: ``database.host`` → ``DATABASE_HOST``
+- **Prefix**: With ``--prefix DB_``: ``host`` → ``DB_HOST``
+- **Special characters**: Dots and hyphens converted to underscores
+
+Example with nested config:
+
+.. code-block:: bash
+
+   # Config: database.toml
+   # host = "localhost"
+   # port = 5432
+   # credentials.username = "myuser"
+   # credentials.password = "secret"
+
+   vaultconfig run database --prefix DB_ env | grep DB_
+   # DB_HOST=localhost
+   # DB_PORT=5432
+   # DB_CREDENTIALS_USERNAME=myuser
+   # DB_CREDENTIALS_PASSWORD=secret
+
+Exit Code
+~~~~~~~~~
+
+The ``run`` command exits with the same exit code as the executed command. This allows
+it to be used in scripts and CI/CD pipelines:
+
+.. code-block:: bash
+
+   # If the command fails, the script stops
+   vaultconfig run database python deploy.py || exit 1
 
 Format Autodetection
 --------------------

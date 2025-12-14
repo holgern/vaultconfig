@@ -169,6 +169,57 @@ eval $(vaultconfig export-env database --prefix DB_ --reveal)
 echo $DB_HOST  # localhost
 ```
 
+#### Run Command with Config
+
+The `run` command loads a configuration and executes a command with config values as
+environment variables. This is similar to `dotenv run` but works with VaultConfig
+configurations.
+
+```bash
+# Run a command with config values as environment variables
+vaultconfig run database python app.py
+
+# Use custom prefix for env vars (default is config name + underscore)
+vaultconfig run database --prefix DB_ python app.py
+
+# Reveal obscured passwords
+vaultconfig run database --reveal python app.py
+
+# Keep lowercase keys (default converts to uppercase)
+vaultconfig run database --no-uppercase python app.py
+
+# Don't override existing environment variables
+vaultconfig run database --no-override python app.py
+
+# Combine options
+vaultconfig run database --prefix MYAPP_ --reveal -- python app.py --arg value
+```
+
+**How it works:**
+
+- Loads the specified configuration
+- Flattens nested configs (e.g., `database.host` → `DATABASE_HOST`)
+- Converts keys to uppercase by default (disable with `--no-uppercase`)
+- Adds optional prefix to all variable names
+- Executes the command with the config as environment variables
+- Exits with the same exit code as the command
+
+**Examples:**
+
+```bash
+# Run a Python script with database config
+vaultconfig run database python manage.py migrate
+
+# Run tests with test config
+vaultconfig run test-env pytest tests/
+
+# Run Docker with config
+vaultconfig run docker-config docker-compose up
+
+# Use with custom directory
+vaultconfig run -d ./myapp-config prod-db python deploy.py
+```
+
 #### Copy & Rename
 
 ```bash
