@@ -487,6 +487,8 @@ def test_cli_export_env_fish(cli_runner, config_dir):
 
 def test_cli_export_env_nushell(cli_runner, config_dir):
     """Test export-env with nushell format."""
+    import json
+
     manager = ConfigManager(config_dir)
     manager.add_config(
         "test", {"host": "localhost", "port": 5432}, obscure_passwords=False
@@ -496,8 +498,10 @@ def test_cli_export_env_nushell(cli_runner, config_dir):
         main, ["export-env", "test", "-C", str(config_dir), "--shell", "nushell"]
     )
     assert result.exit_code == 0
-    assert "$env.HOST = 'localhost'" in result.output
-    assert "$env.PORT = '5432'" in result.output
+    # Nushell format outputs JSON that can be piped to: from json | load-env
+    output_data = json.loads(result.output.strip())
+    assert output_data["HOST"] == "localhost"
+    assert output_data["PORT"] == "5432"
 
 
 def test_cli_export_env_powershell(cli_runner, config_dir):
@@ -542,6 +546,8 @@ def test_cli_export_env_with_prefix(cli_runner, config_dir):
 
 def test_cli_export_env_nested(cli_runner, config_dir):
     """Test export-env with nested configuration."""
+    import json
+
     manager = ConfigManager(config_dir)
     manager.add_config(
         "test",
@@ -553,12 +559,16 @@ def test_cli_export_env_nested(cli_runner, config_dir):
         main, ["export-env", "test", "-C", str(config_dir), "--shell", "nushell"]
     )
     assert result.exit_code == 0
-    assert "$env.DATABASE_HOST = 'localhost'" in result.output
-    assert "$env.DATABASE_PORT = '5432'" in result.output
+    # Nushell format outputs JSON
+    output_data = json.loads(result.output.strip())
+    assert output_data["DATABASE_HOST"] == "localhost"
+    assert output_data["DATABASE_PORT"] == "5432"
 
 
 def test_cli_export_env_special_characters_nushell(cli_runner, config_dir):
     """Test export-env with special characters in nushell format."""
+    import json
+
     manager = ConfigManager(config_dir)
     manager.add_config("test", {"password": "my'pass\\word"}, obscure_passwords=False)
 
@@ -566,8 +576,9 @@ def test_cli_export_env_special_characters_nushell(cli_runner, config_dir):
         main, ["export-env", "test", "-C", str(config_dir), "--shell", "nushell"]
     )
     assert result.exit_code == 0
-    # Nushell should escape backslash and single quote
-    assert "$env.PASSWORD = 'my\\'pass\\\\word'" in result.output
+    # Nushell format outputs JSON which properly escapes special characters
+    output_data = json.loads(result.output.strip())
+    assert output_data["PASSWORD"] == "my'pass\\word"
 
 
 def test_cli_export_env_special_characters_powershell(cli_runner, config_dir):
@@ -720,10 +731,13 @@ def test_cli_export_env_dry_run_copyable_nushell(cli_runner, config_dir):
         ],
     )
     assert result.exit_code == 0
-    # Should show copyable nushell commands
+    # Should show copyable nushell commands with load-env prefix
     assert "Copyable" in result.output
-    assert "$env.HOST = 'localhost'" in result.output
-    assert "$env.PORT = '5432'" in result.output
+    assert "load-env" in result.output
+    # Check for JSON format record in the output
+    assert '"HOST"' in result.output
+    assert '"PORT"' in result.output
+    assert "localhost" in result.output
 
 
 def test_cli_export_env_dry_run_usage_bash(cli_runner, config_dir):

@@ -1083,7 +1083,7 @@ def export_env_command(
     Examples:
         vaultconfig export-env database --prefix DB_
         eval $(vaultconfig export-env database --prefix DB_ --reveal)
-        vaultconfig export-env database --shell nushell | save -f env.nu
+        vaultconfig export-env database --shell nushell | from json | load-env
         vaultconfig export-env database --shell fish | source
         vaultconfig export-env database --dry-run  # Preview only
         vaultconfig export-env database --include "host" --include "port"
@@ -1135,6 +1135,7 @@ def export_env_command(
 
             # Build list of export commands for copyable format
             export_commands = []
+            env_vars_dict = {}
 
             for key, value in flat_data.items():
                 # Convert key to env var format
@@ -1151,10 +1152,14 @@ def export_env_command(
 
                 table.add_row(env_key, display_value)
 
-                # Add to export commands
-                export_commands.append(
-                    _format_env_export(env_key, value_str, shell_type)
-                )
+                # Store for nushell format
+                env_vars_dict[env_key] = value_str
+
+                # Add to export commands (for non-nushell shells)
+                if shell_type != "nushell":
+                    export_commands.append(
+                        _format_env_export(env_key, value_str, shell_type)
+                    )
 
             console.print(table)
 
@@ -1164,7 +1169,13 @@ def export_env_command(
             )
 
             # Create a syntax-highlighted code block
-            code = "\n".join(export_commands)
+            if shell_type == "nushell":
+                # For nushell, show the complete load-env command for copying
+                record = _format_nushell_load_env(env_vars_dict)
+                code = f"load-env {record}"
+            else:
+                code = "\n".join(export_commands)
+
             syntax = Syntax(
                 code,
                 shell_type if shell_type != "powershell" else "powershell",
@@ -1207,12 +1218,16 @@ def export_env_command(
                     "fish session.[/dim]"
                 )
             elif shell_type == "nushell":
-                console.print(f"  [green]{base_cmd} | save -f env.nu[/green]")
-                console.print("  [green]source env.nu[/green]")
+                console.print(f"  [green]{base_cmd} | from json | load-env[/green]")
                 console.print(
-                    "  [dim]Or directly: [/dim][green]"
-                    + base_cmd
-                    + " | lines | each { |line| nu -c $line }[/green]"
+                    "  [dim]This will load the environment variables into your "
+                    "current nushell session.[/dim]"
+                )
+                console.print(f"  [green]{base_cmd} | save -f env.nu[/green]")
+                console.print("  [dim]Then: [/dim][green]source env.nu[/green]")
+                console.print(
+                    "  [dim]This will save the variables to a file that you can "
+                    "source later.[/dim]"
                 )
             elif shell_type == "powershell":
                 usage_example = f"{base_cmd} | Invoke-Expression"
@@ -1237,15 +1252,23 @@ def export_env_command(
             # Ensure shell is not None
             shell_type = shell if shell is not None else "bash"
 
+            # Build environment variables dict
+            env_vars = {}
             for key, value in flat_data.items():
                 # Convert key to env var format
                 env_key = key.replace(".", "_").replace("-", "_")
                 if uppercase:
                     env_key = env_key.upper()
                 env_key = prefix + env_key
+                env_vars[env_key] = str(value)
 
-                # Print export statement for the specified shell
-                click.echo(_format_env_export(env_key, str(value), shell_type))
+            # For nushell, use load-env command format
+            if shell_type == "nushell":
+                click.echo(_format_nushell_load_env(env_vars))
+            else:
+                # For other shells, print individual export statements
+                for env_key, value in env_vars.items():
+                    click.echo(_format_env_export(env_key, value, shell_type))
 
     except VaultConfigError as e:
         console.print(f"[red]Error:[/red] {e}")
@@ -2281,6 +2304,9 @@ def _format_env_export(key: str, value: str, shell: str) -> str:
 
     Returns:
         Formatted export statement
+
+    Note:
+        For nushell with multiple variables, use _format_nushell_load_env instead.
     """
     if shell in ["bash", "zsh"]:
         # Bash/Zsh: export KEY='value'
@@ -2301,6 +2327,28 @@ def _format_env_export(key: str, value: str, shell: str) -> str:
     else:
         # Default to bash format
         return f"export {key}={_shell_quote(value)}"
+
+
+def _format_nushell_load_env(env_vars: dict[str, str]) -> str:
+    """Format environment variables for nushell's load-env command.
+
+    Args:
+        env_vars: Dictionary of environment variable names and values
+
+    Returns:
+        Nushell record that can be piped directly to load-env
+        Format: { "KEY1": "value1", "KEY2": "value2" }
+    """
+    import json
+
+    if not env_vars:
+        return "{}"
+
+    # Output as a nushell record (which is JSON-like)
+    # This can be used both ways:
+    # 1. Piped: vaultconfig export-env name --shell nushell | load-env
+    # 2. Copied: load-env { "KEY": "value" }
+    return json.dumps(env_vars)
 
 
 def _load_schema_from_file(schema_file: str) -> Any:
