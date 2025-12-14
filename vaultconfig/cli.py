@@ -1121,6 +1121,55 @@ def export_env_command(
             )
             console.print(Panel(syntax, border_style="dim"))
 
+            # Show shell-specific usage instructions
+            console.print(
+                f"\n[bold cyan]Usage for {shell_type.capitalize()}:[/bold cyan]"
+            )
+
+            # Build the actual command for usage example
+            cmd_parts = ["vaultconfig", "export-env", name]
+            # Only add config-dir if explicitly provided (not default)
+            if config_dir and str(config_path) != str(_get_config_dir(None)):
+                cmd_parts.extend(["-C", config_dir])
+            if prefix:
+                cmd_parts.extend(["--prefix", prefix])
+            if reveal:
+                cmd_parts.append("--reveal")
+            # Only add --shell if explicitly specified (not auto-detected)
+            if shell:
+                cmd_parts.extend(["--shell", shell_type])
+            base_cmd = " ".join(cmd_parts)
+
+            if shell_type in ["bash", "zsh"]:
+                usage_example = f"eval $({base_cmd})"
+                console.print(f"  [green]{usage_example}[/green]")
+                console.print(
+                    "  [dim]This will set the environment variables in your current "
+                    "shell session.[/dim]"
+                )
+            elif shell_type == "fish":
+                usage_example = f"{base_cmd} | source"
+                console.print(f"  [green]{usage_example}[/green]")
+                console.print(
+                    "  [dim]This will set the environment variables in your current "
+                    "fish session.[/dim]"
+                )
+            elif shell_type == "nushell":
+                console.print(f"  [green]{base_cmd} | save -f env.nu[/green]")
+                console.print("  [green]source env.nu[/green]")
+                console.print(
+                    "  [dim]Or directly: [/dim][green]"
+                    + base_cmd
+                    + " | lines | each { |line| nu -c $line }[/green]"
+                )
+            elif shell_type == "powershell":
+                usage_example = f"{base_cmd} | Invoke-Expression"
+                console.print(f"  [green]{usage_example}[/green]")
+                console.print(
+                    "  [dim]This will set the environment variables in your current "
+                    "PowerShell session.[/dim]"
+                )
+
             if not reveal:
                 console.print(
                     "\n[yellow]Note:[/yellow] Use --reveal to show obscured passwords"
@@ -1128,7 +1177,8 @@ def export_env_command(
 
             console.print(
                 f"\n[dim]Tip: You can copy the commands above and paste "
-                f"them into your {shell_type} shell.[/dim]"
+                f"them into your {shell_type} shell, or use the usage example to load "
+                "them automatically.[/dim]"
             )
         else:
             # Normal mode: Export as shell commands

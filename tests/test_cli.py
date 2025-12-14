@@ -704,3 +704,71 @@ def test_cli_export_env_dry_run_copyable_nushell(cli_runner, config_dir):
     assert "Copyable" in result.output
     assert "$env.HOST = 'localhost'" in result.output
     assert "$env.PORT = '5432'" in result.output
+
+
+def test_cli_export_env_dry_run_usage_bash(cli_runner, config_dir):
+    """Test export-env dry-run shows bash-specific usage instructions."""
+    manager = ConfigManager(config_dir)
+    manager.add_config("test", {"host": "localhost"}, obscure_passwords=False)
+
+    result = cli_runner.invoke(
+        main,
+        [
+            "export-env",
+            "test",
+            "-C",
+            str(config_dir),
+            "--dry-run",
+            "--shell",
+            "bash",
+        ],
+    )
+    assert result.exit_code == 0
+    assert "Usage for Bash:" in result.output
+    assert "eval $(" in result.output
+    assert "vaultconfig export-env test" in result.output
+
+
+def test_cli_export_env_dry_run_usage_nushell(cli_runner, config_dir):
+    """Test export-env dry-run shows nushell-specific usage instructions."""
+    manager = ConfigManager(config_dir)
+    manager.add_config("test", {"host": "localhost"}, obscure_passwords=False)
+
+    result = cli_runner.invoke(
+        main,
+        [
+            "export-env",
+            "test",
+            "-C",
+            str(config_dir),
+            "--dry-run",
+            "--shell",
+            "nushell",
+        ],
+    )
+    assert result.exit_code == 0
+    assert "Usage for Nushell:" in result.output
+    assert "save -f env.nu" in result.output
+    assert "source env.nu" in result.output
+
+
+def test_cli_export_env_dry_run_usage_fish(cli_runner, config_dir):
+    """Test export-env dry-run shows fish-specific usage instructions."""
+    manager = ConfigManager(config_dir)
+    manager.add_config("test", {"host": "localhost"}, obscure_passwords=False)
+
+    result = cli_runner.invoke(
+        main,
+        [
+            "export-env",
+            "test",
+            "-C",
+            str(config_dir),
+            "--dry-run",
+            "--shell",
+            "fish",
+        ],
+    )
+    assert result.exit_code == 0
+    assert "Usage for Fish:" in result.output
+    assert "| source" in result.output
