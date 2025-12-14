@@ -772,3 +772,277 @@ def test_cli_export_env_dry_run_usage_fish(cli_runner, config_dir):
     assert result.exit_code == 0
     assert "Usage for Fish:" in result.output
     assert "| source" in result.output
+
+
+def test_filter_dict():
+    """Test _filter_dict helper function."""
+    from vaultconfig.cli import _filter_dict
+
+    test_data = {
+        "database": {
+            "host": "localhost",
+            "port": 5432,
+            "username": "admin",
+            "password": "secret123",
+        },
+        "api": {
+            "endpoint": "https://api.example.com",
+            "key": "apikey123",
+            "timeout": 30,
+        },
+        "debug": True,
+        "version": "1.0.0",
+    }
+
+    # Test 1: Include only database keys
+    filtered = _filter_dict(test_data, include=("database.*",), exclude=None)
+    assert "database" in filtered
+    assert "api" not in filtered
+    assert "debug" not in filtered
+    assert filtered["database"]["host"] == "localhost"
+    assert filtered["database"]["port"] == 5432
+
+    # Test 2: Exclude password fields
+    filtered = _filter_dict(test_data, include=None, exclude=("*.password", "*.key"))
+    assert "database" in filtered
+    assert "password" not in filtered["database"]
+    assert "host" in filtered["database"]
+    assert "api" in filtered
+    assert "key" not in filtered["api"]
+    assert "endpoint" in filtered["api"]
+
+    # Test 3: Include database but exclude password
+    filtered = _filter_dict(test_data, include=("database.*",), exclude=("*.password",))
+    assert "database" in filtered
+    assert "password" not in filtered["database"]
+    assert "host" in filtered["database"]
+    assert "api" not in filtered
+
+    # Test 4: Include specific keys
+    filtered = _filter_dict(
+        test_data, include=("database.host", "database.port", "version"), exclude=None
+    )
+    assert "database" in filtered
+    assert "host" in filtered["database"]
+    assert "port" in filtered["database"]
+    assert "username" not in filtered["database"]
+    assert "version" in filtered
+    assert "api" not in filtered
+
+    # Test 5: No filters (should return all data)
+    filtered = _filter_dict(test_data, include=None, exclude=None)
+    assert filtered == test_data
+
+    # Test 6: Exclude takes precedence over include
+    filtered = _filter_dict(
+        test_data, include=("database.*",), exclude=("database.password",)
+    )
+    assert "database" in filtered
+    assert "password" not in filtered["database"]
+    assert "host" in filtered["database"]
+
+
+def test_cli_export_with_include(cli_runner, config_dir):
+    """Test export command with --include filter."""
+    manager = ConfigManager(config_dir)
+    manager.add_config(
+        "test",
+        {
+            "database": {"host": "localhost", "port": 5432, "password": "secret"},
+            "api": {"endpoint": "https://api.example.com"},
+        },
+        obscure_passwords=False,
+    )
+
+    result = cli_runner.invoke(
+        main,
+        [
+            "export",
+            "test",
+            "-C",
+            str(config_dir),
+            "--include",
+            "database.*",
+            "--export-format",
+            "json",
+        ],
+    )
+    assert result.exit_code == 0
+    assert "localhost" in result.output
+    assert "5432" in result.output
+    assert "api.example.com" not in result.output
+
+
+def test_cli_export_with_exclude(cli_runner, config_dir):
+    """Test export command with --exclude filter."""
+    manager = ConfigManager(config_dir)
+    manager.add_config(
+        "test",
+        {
+            "database": {"host": "localhost", "port": 5432, "password": "secret"},
+            "api": {"key": "apikey123"},
+        },
+        obscure_passwords=False,
+    )
+
+    result = cli_runner.invoke(
+        main,
+        [
+            "export",
+            "test",
+            "-C",
+            str(config_dir),
+            "--exclude",
+            "*.password",
+            "--exclude",
+            "*.key",
+            "--export-format",
+            "json",
+        ],
+    )
+    assert result.exit_code == 0
+    assert "localhost" in result.output
+    assert "5432" in result.output
+    assert "secret" not in result.output
+    assert "apikey123" not in result.output
+
+
+def test_cli_export_with_include_and_exclude(cli_runner, config_dir):
+    """Test export command with both --include and --exclude filters."""
+    manager = ConfigManager(config_dir)
+    manager.add_config(
+        "test",
+        {
+            "database": {
+                "host": "localhost",
+                "port": 5432,
+                "username": "admin",
+                "password": "secret",
+            }
+        },
+        obscure_passwords=False,
+    )
+
+    result = cli_runner.invoke(
+        main,
+        [
+            "export",
+            "test",
+            "-C",
+            str(config_dir),
+            "--include",
+            "database.*",
+            "--exclude",
+            "*.password",
+            "--export-format",
+            "json",
+        ],
+    )
+    assert result.exit_code == 0
+    assert "localhost" in result.output
+    assert "5432" in result.output
+    assert "admin" in result.output
+    assert "secret" not in result.output
+
+
+def test_cli_export_env_with_include(cli_runner, config_dir):
+    """Test export-env command with --include filter."""
+    manager = ConfigManager(config_dir)
+    manager.add_config(
+        "test",
+        {
+            "database": {"host": "localhost", "port": 5432},
+            "api": {"endpoint": "https://api.example.com"},
+        },
+        obscure_passwords=False,
+    )
+
+    result = cli_runner.invoke(
+        main,
+        [
+            "export-env",
+            "test",
+            "-C",
+            str(config_dir),
+            "--include",
+            "database.*",
+            "--shell",
+            "bash",
+        ],
+    )
+    assert result.exit_code == 0
+    assert "DATABASE_HOST" in result.output
+    assert "DATABASE_PORT" in result.output
+    assert "API_ENDPOINT" not in result.output
+
+
+def test_cli_export_env_with_exclude(cli_runner, config_dir):
+    """Test export-env command with --exclude filter."""
+    manager = ConfigManager(config_dir)
+    manager.add_config(
+        "test",
+        {
+            "database": {"host": "localhost", "password": "secret"},
+            "api": {"key": "apikey123"},
+        },
+        obscure_passwords=False,
+    )
+
+    result = cli_runner.invoke(
+        main,
+        [
+            "export-env",
+            "test",
+            "-C",
+            str(config_dir),
+            "--exclude",
+            "*.password",
+            "--exclude",
+            "*.key",
+            "--shell",
+            "bash",
+        ],
+    )
+    assert result.exit_code == 0
+    assert "DATABASE_HOST" in result.output
+    assert "localhost" in result.output
+    assert "secret" not in result.output
+    assert "apikey123" not in result.output
+
+
+def test_cli_export_env_with_include_and_exclude(cli_runner, config_dir):
+    """Test export-env command with both --include and --exclude filters."""
+    manager = ConfigManager(config_dir)
+    manager.add_config(
+        "test",
+        {
+            "database": {
+                "host": "localhost",
+                "port": 5432,
+                "username": "admin",
+                "password": "secret",
+            }
+        },
+        obscure_passwords=False,
+    )
+
+    result = cli_runner.invoke(
+        main,
+        [
+            "export-env",
+            "test",
+            "-C",
+            str(config_dir),
+            "--include",
+            "database.*",
+            "--exclude",
+            "*.password",
+            "--shell",
+            "bash",
+        ],
+    )
+    assert result.exit_code == 0
+    assert "DATABASE_HOST" in result.output
+    assert "DATABASE_PORT" in result.output
+    assert "DATABASE_USERNAME" in result.output
+    assert "secret" not in result.output

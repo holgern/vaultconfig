@@ -432,7 +432,7 @@ def create_command(
     help="Config directory (uses default if not specified)",
 )
 @click.option("--format", "-f", help="Config format")
-@click.option("--obscure", "-o", is_flag=True, help="Obscure the value (for passwords)")
+@click.option("--obscure", is_flag=True, help="Obscure the value (for passwords)")
 @click.option("--create", "-c", is_flag=True, help="Create config if it doesn't exist")
 def set_command(
     name: str,
@@ -819,6 +819,18 @@ def rename_command(
     "--export-format", "-e", default="json", help="Export format (json/yaml/toml)"
 )
 @click.option("--reveal", "-r", is_flag=True, help="Reveal obscured passwords")
+@click.option(
+    "--include",
+    "-i",
+    multiple=True,
+    help="Include only keys matching pattern (supports wildcards, can be used multiple times)",
+)
+@click.option(
+    "--exclude",
+    "-x",
+    multiple=True,
+    help="Exclude keys matching pattern (supports wildcards, can be used multiple times)",
+)
 def export_command(
     name: str,
     config_dir: str | None,
@@ -826,6 +838,8 @@ def export_command(
     output: str | None,
     export_format: str,
     reveal: bool,
+    include: tuple[str, ...],
+    exclude: tuple[str, ...],
 ) -> None:
     """Export a configuration to a file or stdout.
 
@@ -835,6 +849,8 @@ def export_command(
         vaultconfig export database --export-format json
         vaultconfig export database -o database.json --reveal
         vaultconfig export database -e yaml -o database.yaml
+        vaultconfig export database --include "database.*" --exclude "*.password"
+        vaultconfig export database -i "host" -i "port" -o connection.json
     """
     try:
         config_path = _get_config_dir(config_dir)
@@ -853,6 +869,11 @@ def export_command(
 
         # Get configuration data
         data = config.get_all(reveal_secrets=reveal)
+
+        # Filter data based on include/exclude patterns
+        data = _filter_dict(
+            data, include if include else None, exclude if exclude else None
+        )
 
         # Export in requested format
         if export_format == "json":
@@ -1020,6 +1041,18 @@ def import_command(
     is_flag=True,
     help="Show preview of variables without shell-specific formatting",
 )
+@click.option(
+    "--include",
+    "-i",
+    multiple=True,
+    help="Include only keys matching pattern (supports wildcards, can be used multiple times)",
+)
+@click.option(
+    "--exclude",
+    "-x",
+    multiple=True,
+    help="Exclude keys matching pattern (supports wildcards, can be used multiple times)",
+)
 def export_env_command(
     name: str,
     config_dir: str | None,
@@ -1029,6 +1062,8 @@ def export_env_command(
     uppercase: bool,
     shell: str | None,
     dry_run: bool,
+    include: tuple[str, ...],
+    exclude: tuple[str, ...],
 ) -> None:
     """Export configuration as environment variables.
 
@@ -1041,6 +1076,8 @@ def export_env_command(
         vaultconfig export-env database --shell nushell | save -f env.nu
         vaultconfig export-env database --shell fish | source
         vaultconfig export-env database --dry-run  # Preview only
+        vaultconfig export-env database --include "host" --include "port"
+        vaultconfig export-env database --exclude "*.password" --exclude "*.secret"
     """
     try:
         config_path = _get_config_dir(config_dir)
@@ -1059,6 +1096,11 @@ def export_env_command(
 
         # Get configuration data
         data = config.get_all(reveal_secrets=reveal)
+
+        # Filter data based on include/exclude patterns
+        data = _filter_dict(
+            data, include if include else None, exclude if exclude else None
+        )
 
         # Flatten nested dictionaries
         flat_data = _flatten_dict(data)
@@ -2120,6 +2162,64 @@ def _flatten_dict(data: dict, parent_key: str = "", sep: str = ".") -> dict:
         else:
             items.append((new_key, value))
     return dict(items)
+
+
+def _filter_dict(
+    data: dict, include: tuple[str, ...] | None, exclude: tuple[str, ...] | None
+) -> dict:
+    """Filter a dictionary based on include and exclude patterns.
+
+    Args:
+        data: Dictionary to filter (can be nested)
+        include: Tuple of key patterns to include (supports dot notation and wildcards)
+        exclude: Tuple of key patterns to exclude (supports dot notation and wildcards)
+
+    Returns:
+        Filtered dictionary
+
+    Note:
+        - If include is specified, only matching keys are included
+        - If exclude is specified, matching keys are removed
+        - Exclude takes precedence over include
+        - Patterns support wildcards: "database.*" matches all keys starting with "database."
+    """
+    import fnmatch
+
+    # If no filters, return as-is
+    if not include and not exclude:
+        return data
+
+    # Flatten the dictionary to work with full key paths
+    flat_data = _flatten_dict(data)
+    filtered_flat: dict[str, Any] = {}
+
+    for key, value in flat_data.items():
+        # Check include patterns
+        included = True
+        if include:
+            included = any(fnmatch.fnmatch(key, pattern) for pattern in include)
+
+        # Check exclude patterns (takes precedence)
+        excluded = False
+        if exclude:
+            excluded = any(fnmatch.fnmatch(key, pattern) for pattern in exclude)
+
+        # Add if included and not excluded
+        if included and not excluded:
+            filtered_flat[key] = value
+
+    # Reconstruct nested dictionary from filtered flat data
+    result: dict[str, Any] = {}
+    for key, value in filtered_flat.items():
+        keys = key.split(".")
+        current = result
+        for k in keys[:-1]:
+            if k not in current:
+                current[k] = {}
+            current = current[k]
+        current[keys[-1]] = value
+
+    return result
 
 
 def _shell_quote(value: str) -> str:
