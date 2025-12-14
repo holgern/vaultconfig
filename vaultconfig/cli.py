@@ -1015,6 +1015,11 @@ def import_command(
     ),
     help="Shell type (auto-detected if not specified)",
 )
+@click.option(
+    "--dry-run",
+    is_flag=True,
+    help="Show preview of variables without shell-specific formatting",
+)
 def export_env_command(
     name: str,
     config_dir: str | None,
@@ -1023,6 +1028,7 @@ def export_env_command(
     reveal: bool,
     uppercase: bool,
     shell: str | None,
+    dry_run: bool,
 ) -> None:
     """Export configuration as environment variables.
 
@@ -1034,6 +1040,7 @@ def export_env_command(
         eval $(vaultconfig export-env database --prefix DB_ --reveal)
         vaultconfig export-env database --shell nushell | save -f env.nu
         vaultconfig export-env database --shell fish | source
+        vaultconfig export-env database --dry-run  # Preview only
     """
     try:
         config_path = _get_config_dir(config_dir)
@@ -1056,20 +1063,87 @@ def export_env_command(
         # Flatten nested dictionaries
         flat_data = _flatten_dict(data)
 
-        # Detect shell if not specified
-        if shell is None:
+        # Detect shell if not specified (only needed if not dry-run)
+        if shell is None and not dry_run:
             shell = _detect_shell()
 
-        # Export as environment variables
-        for key, value in flat_data.items():
-            # Convert key to env var format
-            env_key = key.replace(".", "_").replace("-", "_")
-            if uppercase:
-                env_key = env_key.upper()
-            env_key = prefix + env_key
+        # Show preview or export as environment variables
+        if dry_run:
+            # Dry-run: Show readable preview with Rich table
+            from rich.panel import Panel
+            from rich.syntax import Syntax
+            from rich.table import Table
 
-            # Print export statement for the specified shell
-            click.echo(_format_env_export(env_key, str(value), shell))
+            table = Table(title=f"Environment Variables Preview: {name}")
+            table.add_column("Variable", style="cyan")
+            table.add_column("Value", style="green")
+
+            # Detect shell for copyable format
+            shell_type = shell if shell is not None else _detect_shell()
+
+            # Build list of export commands for copyable format
+            export_commands = []
+
+            for key, value in flat_data.items():
+                # Convert key to env var format
+                env_key = key.replace(".", "_").replace("-", "_")
+                if uppercase:
+                    env_key = env_key.upper()
+                env_key = prefix + env_key
+
+                # Truncate long values for display in table
+                value_str = str(value)
+                display_value = value_str
+                if len(value_str) > 50:
+                    display_value = value_str[:47] + "..."
+
+                table.add_row(env_key, display_value)
+
+                # Add to export commands
+                export_commands.append(
+                    _format_env_export(env_key, value_str, shell_type)
+                )
+
+            console.print(table)
+
+            # Show copyable shell commands
+            console.print(
+                f"\n[bold]Copyable {shell_type.capitalize()} Commands:[/bold]"
+            )
+
+            # Create a syntax-highlighted code block
+            code = "\n".join(export_commands)
+            syntax = Syntax(
+                code,
+                shell_type if shell_type != "powershell" else "powershell",
+                theme="monokai",
+                line_numbers=False,
+            )
+            console.print(Panel(syntax, border_style="dim"))
+
+            if not reveal:
+                console.print(
+                    "\n[yellow]Note:[/yellow] Use --reveal to show obscured passwords"
+                )
+
+            console.print(
+                f"\n[dim]Tip: You can copy the commands above and paste "
+                f"them into your {shell_type} shell.[/dim]"
+            )
+        else:
+            # Normal mode: Export as shell commands
+            # Ensure shell is not None
+            shell_type = shell if shell is not None else "bash"
+
+            for key, value in flat_data.items():
+                # Convert key to env var format
+                env_key = key.replace(".", "_").replace("-", "_")
+                if uppercase:
+                    env_key = env_key.upper()
+                env_key = prefix + env_key
+
+                # Print export statement for the specified shell
+                click.echo(_format_env_export(env_key, str(value), shell_type))
 
     except VaultConfigError as e:
         console.print(f"[red]Error:[/red] {e}")

@@ -663,6 +663,7 @@ Options
 - ``-r, --reveal`` - Reveal obscured passwords
 - ``-u, --uppercase`` - Convert keys to uppercase (default: true)
 - ``-s, --shell TEXT`` - Shell type: bash, zsh, fish, nushell, powershell (auto-detected if not specified)
+- ``--dry-run`` - Show preview with copyable commands instead of outputting for eval/source
 - ``--help`` - Show help message
 
 Supported Shells
@@ -773,6 +774,39 @@ The command detects your shell in the following order:
 3. Default to bash format if detection fails
 
 You can always override auto-detection with the ``--shell`` option.
+
+Dry-Run Mode
+~~~~~~~~~~~~
+
+Use ``--dry-run`` to preview environment variables before exporting them. This mode
+displays:
+
+1. A formatted table showing all variables and their values
+2. Shell-specific copyable commands in a syntax-highlighted panel
+3. Helpful notes and tips
+
+This is useful for:
+
+- Verifying what will be exported before using ``eval`` or ``source``
+- Getting ready-to-copy commands for manual setup
+- Checking variable names with different prefixes
+- Reviewing obscured values before revealing them
+
+Example:
+
+.. code-block:: bash
+
+   # Preview with bash format
+   vaultconfig export-env database --dry-run
+
+   # Preview with nushell format and prefix
+   vaultconfig export-env database --shell nushell --prefix DB_ --dry-run
+
+   # Preview and reveal passwords
+   vaultconfig export-env database --dry-run --reveal
+
+The dry-run output shows both a table view and copyable commands that you can paste
+directly into your shell.
 
 Format Autodetection
 --------------------

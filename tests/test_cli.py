@@ -585,3 +585,122 @@ def test_cli_export_env_autodetect_default(cli_runner, config_dir, monkeypatch):
     assert result.exit_code == 0
     # Should default to bash format
     assert "export HOST='localhost'" in result.output
+
+
+def test_cli_export_env_dry_run(cli_runner, config_dir):
+    """Test export-env with --dry-run flag."""
+    manager = ConfigManager(config_dir)
+    manager.add_config(
+        "test",
+        {"host": "localhost", "port": 5432, "password": "secret"},
+        obscure_passwords=True,
+    )
+
+    result = cli_runner.invoke(
+        main, ["export-env", "test", "-C", str(config_dir), "--dry-run"]
+    )
+    assert result.exit_code == 0
+    # Should show table format
+    assert "Preview" in result.output and "test" in result.output
+    assert "HOST" in result.output
+    assert "PORT" in result.output
+    assert "PASSWORD" in result.output
+    # Should show copyable commands section
+    assert "Copyable" in result.output
+    assert "Commands" in result.output
+    # Should show note about --reveal
+    assert "--reveal" in result.output
+    # Should show tip about copying
+    assert "Tip:" in result.output or "copy" in result.output.lower()
+
+
+def test_cli_export_env_dry_run_with_reveal(cli_runner, config_dir):
+    """Test export-env with --dry-run and --reveal flags."""
+    manager = ConfigManager(config_dir)
+    manager.add_config(
+        "test", {"host": "localhost", "password": "secret"}, obscure_passwords=True
+    )
+
+    result = cli_runner.invoke(
+        main, ["export-env", "test", "-C", str(config_dir), "--dry-run", "--reveal"]
+    )
+    assert result.exit_code == 0
+    assert "Preview" in result.output and "test" in result.output
+    # Should not show the reveal note when using --reveal
+    assert "Note:" not in result.output
+
+
+def test_cli_export_env_dry_run_with_prefix(cli_runner, config_dir):
+    """Test export-env dry-run with prefix."""
+    manager = ConfigManager(config_dir)
+    manager.add_config(
+        "test", {"host": "localhost", "port": 5432}, obscure_passwords=False
+    )
+
+    result = cli_runner.invoke(
+        main,
+        [
+            "export-env",
+            "test",
+            "-C",
+            str(config_dir),
+            "--dry-run",
+            "--prefix",
+            "DB_",
+        ],
+    )
+    assert result.exit_code == 0
+    assert "DB_HOST" in result.output
+    assert "DB_PORT" in result.output
+
+
+def test_cli_export_env_dry_run_copyable_bash(cli_runner, config_dir):
+    """Test export-env dry-run shows copyable bash commands."""
+    manager = ConfigManager(config_dir)
+    manager.add_config(
+        "test", {"host": "localhost", "port": 5432}, obscure_passwords=False
+    )
+
+    result = cli_runner.invoke(
+        main,
+        [
+            "export-env",
+            "test",
+            "-C",
+            str(config_dir),
+            "--dry-run",
+            "--shell",
+            "bash",
+        ],
+    )
+    assert result.exit_code == 0
+    # Should show copyable commands
+    assert "Copyable" in result.output
+    assert "export HOST='localhost'" in result.output
+    assert "export PORT='5432'" in result.output
+
+
+def test_cli_export_env_dry_run_copyable_nushell(cli_runner, config_dir):
+    """Test export-env dry-run shows copyable nushell commands."""
+    manager = ConfigManager(config_dir)
+    manager.add_config(
+        "test", {"host": "localhost", "port": 5432}, obscure_passwords=False
+    )
+
+    result = cli_runner.invoke(
+        main,
+        [
+            "export-env",
+            "test",
+            "-C",
+            str(config_dir),
+            "--dry-run",
+            "--shell",
+            "nushell",
+        ],
+    )
+    assert result.exit_code == 0
+    # Should show copyable nushell commands
+    assert "Copyable" in result.output
+    assert "$env.HOST = 'localhost'" in result.output
+    assert "$env.PORT = '5432'" in result.output

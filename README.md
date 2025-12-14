@@ -161,6 +161,9 @@ vaultconfig import database --from-file config.yaml --overwrite
 #### Environment Variables
 
 ```bash
+# Preview what will be exported (dry-run mode)
+vaultconfig export-env database --dry-run
+
 # Export as environment variables (auto-detects shell)
 vaultconfig export-env database --prefix DB_
 
@@ -184,6 +187,9 @@ vaultconfig export-env database --shell zsh
 vaultconfig export-env database --shell fish
 vaultconfig export-env database --shell nushell
 vaultconfig export-env database --shell powershell
+
+# Preview with prefix before exporting
+vaultconfig export-env database --prefix DB_ --dry-run
 ```
 
 **Supported Shells:**
@@ -195,6 +201,16 @@ vaultconfig export-env database --shell powershell
 - **powershell** - PowerShell
 
 The shell type is auto-detected from your environment if not specified.
+
+**Dry-Run Mode:** Use `--dry-run` to preview the environment variables in a readable
+table format. The output includes:
+
+- A formatted table showing all variables and their values
+- Shell-specific copyable commands that you can paste directly into your terminal
+- Helpful tips and notes
+
+This is useful for verifying what will be exported before actually using it, and
+provides ready-to-copy commands for manual setup.
 
 #### Run Command with Config
 
