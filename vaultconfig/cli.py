@@ -823,13 +823,18 @@ def rename_command(
     "--include",
     "-i",
     multiple=True,
-    help="Include only keys matching pattern (supports wildcards, can be used multiple times)",
+    help=(
+        "Include only keys matching pattern "
+        "(supports wildcards, can be used multiple times)"
+    ),
 )
 @click.option(
     "--exclude",
     "-x",
     multiple=True,
-    help="Exclude keys matching pattern (supports wildcards, can be used multiple times)",
+    help=(
+        "Exclude keys matching pattern (supports wildcards, can be used multiple times)"
+    ),
 )
 def export_command(
     name: str,
@@ -1045,13 +1050,18 @@ def import_command(
     "--include",
     "-i",
     multiple=True,
-    help="Include only keys matching pattern (supports wildcards, can be used multiple times)",
+    help=(
+        "Include only keys matching pattern "
+        "(supports wildcards, can be used multiple times)"
+    ),
 )
 @click.option(
     "--exclude",
     "-x",
     multiple=True,
-    help="Exclude keys matching pattern (supports wildcards, can be used multiple times)",
+    help=(
+        "Exclude keys matching pattern (supports wildcards, can be used multiple times)"
+    ),
 )
 def export_env_command(
     name: str,
@@ -2181,7 +2191,8 @@ def _filter_dict(
         - If include is specified, only matching keys are included
         - If exclude is specified, matching keys are removed
         - Exclude takes precedence over include
-        - Patterns support wildcards: "database.*" matches all keys starting with "database."
+        - Patterns support wildcards: "database.*" matches all keys starting
+          with "database."
     """
     import fnmatch
 

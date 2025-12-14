@@ -350,6 +350,9 @@ def test_cli_nested_config_display(cli_runner, config_dir):
 
 def test_cli_run_command(cli_runner, config_dir, tmp_path):
     """Test run command with environment variables."""
+    import platform
+    import sys
+
     manager = ConfigManager(config_dir)
     manager.add_config(
         "test",
@@ -357,16 +360,30 @@ def test_cli_run_command(cli_runner, config_dir, tmp_path):
         obscure_passwords=False,
     )
 
-    # Create a test script that prints env vars
-    test_script = tmp_path / "test.sh"
-    test_script.write_text(
-        "#!/bin/bash\necho HOST=$HOST\necho PORT=$PORT\necho NESTED_KEY=$NESTED_KEY\n"
-    )
-    test_script.chmod(0o755)
+    # Create platform-specific test script
+    if platform.system() == "Windows":
+        # Use Python script that works on all platforms
+        test_script = tmp_path / "test.py"
+        test_script.write_text(
+            "import os\n"
+            'print(f\'HOST={os.environ.get("HOST", "")}\')\n'
+            'print(f\'PORT={os.environ.get("PORT", "")}\')\n'
+            'print(f\'NESTED_KEY={os.environ.get("NESTED_KEY", "")}\')\n'
+        )
+        cmd = [sys.executable, str(test_script)]
+    else:
+        # Unix: use bash script
+        test_script = tmp_path / "test.sh"
+        test_script.write_text(
+            "#!/bin/bash\n"
+            "echo HOST=$HOST\n"
+            "echo PORT=$PORT\n"
+            "echo NESTED_KEY=$NESTED_KEY\n"
+        )
+        test_script.chmod(0o755)
+        cmd = ["bash", str(test_script)]
 
-    result = cli_runner.invoke(
-        main, ["run", "test", "-d", str(config_dir), "bash", str(test_script)]
-    )
+    result = cli_runner.invoke(main, ["run", "test", "-d", str(config_dir)] + cmd)
 
     # The command should execute successfully
     # Note: exit_code may vary depending on how execvpe is handled in tests
@@ -376,26 +393,29 @@ def test_cli_run_command(cli_runner, config_dir, tmp_path):
 
 def test_cli_run_command_with_prefix(cli_runner, config_dir, tmp_path):
     """Test run command with custom prefix."""
+    import platform
+    import sys
+
     manager = ConfigManager(config_dir)
     manager.add_config("test", {"host": "db.example.com"}, obscure_passwords=False)
 
-    # Create a test script
-    test_script = tmp_path / "test.sh"
-    test_script.write_text("#!/bin/bash\necho DB_HOST=$DB_HOST\n")
-    test_script.chmod(0o755)
+    # Create platform-specific test script
+    if platform.system() == "Windows":
+        # Use Python script that works on all platforms
+        test_script = tmp_path / "test.py"
+        test_script.write_text(
+            'import os\nprint(f\'DB_HOST={os.environ.get("DB_HOST", "")}\')\n'
+        )
+        cmd = [sys.executable, str(test_script)]
+    else:
+        # Unix: use bash script
+        test_script = tmp_path / "test.sh"
+        test_script.write_text("#!/bin/bash\necho DB_HOST=$DB_HOST\n")
+        test_script.chmod(0o755)
+        cmd = ["bash", str(test_script)]
 
     result = cli_runner.invoke(
-        main,
-        [
-            "run",
-            "test",
-            "-d",
-            str(config_dir),
-            "--prefix",
-            "DB_",
-            "bash",
-            str(test_script),
-        ],
+        main, ["run", "test", "-d", str(config_dir), "--prefix", "DB_"] + cmd
     )
 
     assert "DB_HOST=db.example.com" in result.output or result.exit_code == 0
