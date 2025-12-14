@@ -17,8 +17,39 @@ Commands Overview
 - ``init`` - Initialize a new config directory
 - ``list`` - List all configurations
 - ``show`` - Show a configuration
+- ``create`` - Create a new configuration
+- ``set`` - Set configuration values
+- ``get`` - Get a configuration value
+- ``unset`` - Remove configuration keys
 - ``delete`` - Delete a configuration
-- ``encrypt`` - Manage encryption
+- ``copy`` - Copy a configuration
+- ``rename`` - Rename a configuration
+- ``export`` - Export a configuration to a file
+- ``import`` - Import a configuration from a file
+- ``export-env`` - Export configuration as environment variables
+- ``encrypt`` - Manage encryption (command group with set, remove, check subcommands)
+- ``encrypt-file`` - Encrypt a specific config file
+- ``decrypt-file`` - Decrypt a specific config file
+- ``encrypt-dir`` - Encrypt all configs in directory
+- ``decrypt-dir`` - Decrypt all configs in directory
+- ``encryption`` - Manage encryption settings (command group)
+- ``validate`` - Validate a configuration against a schema
+- ``obscure`` - Manage password obscuring (command group)
+
+Default Config Directory
+------------------------
+
+VaultConfig uses a platform-specific default config directory:
+
+- **Linux/macOS**: ``~/.config/vaultconfig``
+- **Windows**: ``%APPDATA%\vaultconfig``
+
+You can override this with:
+
+- ``-d, --config-dir`` option on any command
+- ``VAULTCONFIG_DIR`` environment variable
+
+Most commands accept either a positional ``CONFIG_DIR`` argument or the ``-d`` option.
 
 init Command
 ------------
@@ -30,11 +61,12 @@ Syntax
 
 .. code-block:: bash
 
-   vaultconfig init [OPTIONS] CONFIG_DIR
+   vaultconfig init [OPTIONS]
 
 Options
 ~~~~~~~
 
+- ``-d, --config-dir PATH`` - Config directory (uses default if not specified)
 - ``-f, --format TEXT`` - Config format: toml (default), ini, or yaml
 - ``-e, --encrypt`` - Enable encryption (prompts for password)
 - ``--help`` - Show help message
@@ -42,23 +74,29 @@ Options
 Examples
 ~~~~~~~~
 
-Basic initialization:
+Initialize default directory:
 
 .. code-block:: bash
 
-   vaultconfig init ./myapp-config
+   vaultconfig init
+
+Initialize custom directory:
+
+.. code-block:: bash
+
+   vaultconfig init -d ./myapp-config
 
 With specific format:
 
 .. code-block:: bash
 
-   vaultconfig init ./myapp-config --format yaml
+   vaultconfig init --format yaml
 
 With encryption:
 
 .. code-block:: bash
 
-   vaultconfig init ./myapp-config --encrypt
+   vaultconfig init --encrypt
    # Prompts for password
 
 list Command
@@ -71,12 +109,19 @@ Syntax
 
 .. code-block:: bash
 
-   vaultconfig list [OPTIONS] CONFIG_DIR
+   vaultconfig list [CONFIG_DIR] [OPTIONS]
+
+Arguments
+~~~~~~~~~
+
+- ``CONFIG_DIR`` - Path to config directory (optional, uses default if not specified)
 
 Options
 ~~~~~~~
 
+- ``-d, --dir PATH`` - Config directory (alternative to positional argument)
 - ``-f, --format TEXT`` - Config format (autodetected if not specified)
+- ``-o, --output TEXT`` - Output format: table (default), json, or plain
 - ``--help`` - Show help message
 
 Examples
@@ -84,11 +129,23 @@ Examples
 
 .. code-block:: bash
 
-   # List all configs
+   # List all configs (uses default directory)
+   vaultconfig list
+
+   # List with positional argument
    vaultconfig list ./myapp-config
+
+   # List with option
+   vaultconfig list -d ./myapp-config
 
    # List with explicit format
    vaultconfig list ./myapp-config --format toml
+
+   # List as JSON
+   vaultconfig list --output json
+
+   # List as plain names (one per line)
+   vaultconfig list --output plain
 
 Output Example
 ~~~~~~~~~~~~~~
@@ -113,35 +170,48 @@ Syntax
 
 .. code-block:: bash
 
-   vaultconfig show [OPTIONS] CONFIG_DIR NAME
+   vaultconfig show [OPTIONS] NAME
 
 Arguments
 ~~~~~~~~~
 
-- ``CONFIG_DIR`` - Path to config directory
 - ``NAME`` - Name of the configuration to show
 
 Options
 ~~~~~~~
 
+- ``-d, --config-dir PATH`` - Config directory (uses default if not specified)
 - ``-f, --format TEXT`` - Config format (autodetected if not specified)
 - ``-r, --reveal`` - Reveal obscured passwords
+- ``-o, --output TEXT`` - Output format: pretty (default), json, yaml, or toml
 - ``--help`` - Show help message
 
 Examples
 ~~~~~~~~
 
-Show with obscured passwords:
+Show with obscured passwords (uses default directory):
 
 .. code-block:: bash
 
-   vaultconfig show ./myapp-config database
+   vaultconfig show database
 
 Show with revealed passwords:
 
 .. code-block:: bash
 
-   vaultconfig show ./myapp-config database --reveal
+   vaultconfig show database --reveal
+
+Show from custom directory:
+
+.. code-block:: bash
+
+   vaultconfig show -d ./myapp-config database
+
+Show as JSON:
+
+.. code-block:: bash
+
+   vaultconfig show database --output json
 
 Output Example
 ~~~~~~~~~~~~~~
@@ -167,17 +237,17 @@ Syntax
 
 .. code-block:: bash
 
-   vaultconfig delete [OPTIONS] CONFIG_DIR NAME
+   vaultconfig delete [OPTIONS] NAME
 
 Arguments
 ~~~~~~~~~
 
-- ``CONFIG_DIR`` - Path to config directory
 - ``NAME`` - Name of the configuration to delete
 
 Options
 ~~~~~~~
 
+- ``-d, --config-dir PATH`` - Config directory (uses default if not specified)
 - ``-f, --format TEXT`` - Config format (autodetected if not specified)
 - ``-y, --yes`` - Skip confirmation prompt
 - ``--help`` - Show help message
@@ -185,18 +255,24 @@ Options
 Examples
 ~~~~~~~~
 
-With confirmation:
+With confirmation (uses default directory):
 
 .. code-block:: bash
 
-   vaultconfig delete ./myapp-config database
-   # Prompts: "Are you sure you want to delete this config? [y/N]:"
+   vaultconfig delete database
+   # Prompts: "Are you sure you want to delete config 'database'? [y/N]:"
 
 Skip confirmation:
 
 .. code-block:: bash
 
-   vaultconfig delete ./myapp-config database --yes
+   vaultconfig delete database --yes
+
+With custom directory:
+
+.. code-block:: bash
+
+   vaultconfig delete -d ./myapp-config database
 
 encrypt Command Group
 ---------------------
@@ -206,25 +282,38 @@ Manage encryption for configuration files.
 encrypt set
 ~~~~~~~~~~~
 
-Set or change the encryption password.
+Set or change the encryption password for all configs in a directory.
 
 Syntax:
 
 .. code-block:: bash
 
-   vaultconfig encrypt set [OPTIONS] CONFIG_DIR
+   vaultconfig encrypt set [OPTIONS]
 
 Options:
 
+- ``-d, --config-dir PATH`` - Config directory (uses default if not specified)
 - ``-f, --format TEXT`` - Config format (autodetected if not specified)
+- ``-p, --password TEXT`` - Encryption password (prompts if not provided)
 - ``--help`` - Show help message
 
-Example:
+Examples:
 
 .. code-block:: bash
 
-   vaultconfig encrypt set ./myapp-config
+   # Set password (uses default directory)
+   vaultconfig encrypt set
    # Prompts for new password twice
+
+   # Set password for custom directory
+   vaultconfig encrypt set -d ./myapp-config
+
+   # Set password non-interactively
+   vaultconfig encrypt set --password "my-password"
+
+   # Using environment variable
+   export VAULTCONFIG_PASSWORD="my-password"
+   vaultconfig encrypt set
 
 encrypt remove
 ~~~~~~~~~~~~~~
@@ -235,46 +324,109 @@ Syntax:
 
 .. code-block:: bash
 
-   vaultconfig encrypt remove [OPTIONS] CONFIG_DIR
+   vaultconfig encrypt remove [OPTIONS]
 
 Options:
 
+- ``-d, --config-dir PATH`` - Config directory (uses default if not specified)
 - ``-f, --format TEXT`` - Config format (autodetected if not specified)
 - ``-y, --yes`` - Skip confirmation prompt
 - ``--help`` - Show help message
 
-Example:
+Examples:
 
 .. code-block:: bash
 
-   vaultconfig encrypt remove ./myapp-config
-   # Prompts for confirmation
+   # Remove encryption (prompts for confirmation)
+   vaultconfig encrypt remove
+
+   # Remove from custom directory
+   vaultconfig encrypt remove -d ./myapp-config
+
+   # Skip confirmation
+   vaultconfig encrypt remove --yes
+
+   # Using environment variable for password
+   export VAULTCONFIG_PASSWORD="my-password"
+   vaultconfig encrypt remove --yes
 
 encrypt check
 ~~~~~~~~~~~~~
 
-Check if configs are encrypted.
+Check encryption status of all configs in a directory.
 
 Syntax:
 
 .. code-block:: bash
 
-   vaultconfig encrypt check [OPTIONS] CONFIG_DIR
+   vaultconfig encrypt check [OPTIONS]
 
 Options:
 
+- ``-d, --config-dir PATH`` - Config directory (uses default if not specified)
 - ``-f, --format TEXT`` - Config format (autodetected if not specified)
 - ``--help`` - Show help message
 
-Example:
+Examples:
 
 .. code-block:: bash
 
-   vaultconfig encrypt check ./myapp-config
-   # Output: "✓ Configs are encrypted" or "! Configs are NOT encrypted"
+   # Check encryption status (uses default directory)
+   vaultconfig encrypt check
+
+   # Check custom directory
+   vaultconfig encrypt check -d ./myapp-config
+
+Output Examples:
+
+.. code-block:: text
+
+   # All encrypted
+   All configs (3) are encrypted
+    Encryption Status
+   ┏━━━━━━━━━━┳━━━━━━━━━━━┓
+   ┃ Name     ┃ Encrypted ┃
+   ┡━━━━━━━━━━╇━━━━━━━━━━━┩
+   │ database │ Yes       │
+   │ api      │ Yes       │
+   │ cache    │ Yes       │
+   └──────────┴───────────┘
+
+   # None encrypted
+   All configs (2) are NOT encrypted
+    Encryption Status
+   ┏━━━━━━━━━━┳━━━━━━━━━━━┓
+   ┃ Name     ┃ Encrypted ┃
+   ┡━━━━━━━━━━╇━━━━━━━━━━━┩
+   │ database │ No        │
+   │ api      │ No        │
+   └──────────┴───────────┘
+
+   # Mixed
+   2/3 configs are encrypted
+    Encryption Status
+   ┏━━━━━━━━━━┳━━━━━━━━━━━┓
+   ┃ Name     ┃ Encrypted ┃
+   ┡━━━━━━━━━━╇━━━━━━━━━━━┩
+   │ database │ Yes       │
+   │ api      │ Yes       │
+   │ cache    │ No        │
+   └──────────┴───────────┘
 
 Environment Variables
 ---------------------
+
+VAULTCONFIG_DIR
+~~~~~~~~~~~~~~~
+
+Set the default config directory:
+
+.. code-block:: bash
+
+   export VAULTCONFIG_DIR=./myapp-config
+   vaultconfig list  # Uses ./myapp-config
+
+This allows you to omit the ``-d`` option on all commands.
 
 VAULTCONFIG_PASSWORD
 ~~~~~~~~~~~~~~~~~~~~
@@ -284,7 +436,7 @@ Set the password for encrypted configs:
 .. code-block:: bash
 
    export VAULTCONFIG_PASSWORD="my-secure-password"
-   vaultconfig list ./myapp-config
+   vaultconfig list
 
 This avoids interactive password prompts.
 

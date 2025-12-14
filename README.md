@@ -204,21 +204,30 @@ vaultconfig validate database --schema schema.yaml
 #### Encryption Management
 
 ```bash
-# Set/change password
-vaultconfig encrypt set ./myapp-config
+# Set/change password (uses default directory or specify with -d)
+vaultconfig encrypt set
+vaultconfig encrypt set -d ./myapp-config
 
 # Remove encryption
-vaultconfig encrypt remove ./myapp-config
+vaultconfig encrypt remove
+vaultconfig encrypt remove -d ./myapp-config
 
 # Check encryption status
-vaultconfig encrypt check ./myapp-config
+vaultconfig encrypt check
+vaultconfig encrypt check -d ./myapp-config
 ```
 
 #### Deletion
 
 ```bash
-# Delete a configuration
+# Delete a configuration (prompts for confirmation)
 vaultconfig delete myconfig
+
+# Delete without confirmation
+vaultconfig delete myconfig --yes
+
+# Delete from custom directory
+vaultconfig delete -d ./myapp-config myconfig
 ```
 
 ### Python API Usage
@@ -497,6 +506,7 @@ nested:
 
 ## Environment Variables
 
+- `VAULTCONFIG_DIR`: Default config directory (overrides platform default)
 - `VAULTCONFIG_PASSWORD`: Password for encrypted configs
 - `VAULTCONFIG_PASSWORD_COMMAND`: Command to retrieve password (e.g., from password
   manager)

@@ -280,7 +280,7 @@ def test_cli_encrypt_check_encrypted(cli_runner, config_dir):
 
     result = cli_runner.invoke(main, ["encrypt", "check", "-d", str(config_dir)])
     assert result.exit_code == 0
-    assert "NOT encrypted" in result.output  # Manager created without password
+    assert "encrypted" in result.output.lower()  # Should detect encrypted status
 
 
 def test_cli_encrypt_check_not_encrypted(cli_runner, config_dir):

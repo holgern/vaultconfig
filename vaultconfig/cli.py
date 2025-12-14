@@ -118,9 +118,11 @@ def init(config_dir: str | None, format: str, encrypt: bool) -> None:
 
 
 @main.command(name="list")
+@click.argument("config_dir", required=False, type=click.Path())
 @click.option(
-    "--config-dir",
     "-d",
+    "--dir",
+    "config_dir_option",
     type=click.Path(),
     help="Config directory (uses default if not specified)",
 )
@@ -128,11 +130,24 @@ def init(config_dir: str | None, format: str, encrypt: bool) -> None:
 @click.option(
     "--output", "-o", default="table", help="Output format (table/json/plain)"
 )
-def list_command(config_dir: str | None, format: str | None, output: str) -> None:
+def list_command(
+    config_dir: str | None,
+    config_dir_option: str | None,
+    format: str | None,
+    output: str,
+) -> None:
     """List all configurations.
 
     Uses default config directory if not specified.
+
+    Examples:
+        vaultconfig list
+        vaultconfig list /path/to/config
+        vaultconfig list -d /path/to/config
     """
+    # Use positional argument if provided, otherwise use option
+    if config_dir is None:
+        config_dir = config_dir_option
     try:
         config_path = _get_config_dir(config_dir)
         if not config_path.exists():
@@ -143,8 +158,11 @@ def list_command(config_dir: str | None, format: str | None, output: str) -> Non
                 console.print(f"Run 'vaultconfig init' to create one at: {config_path}")
             return
 
-        manager = _get_manager(str(config_path), format)
-        configs = manager.list_configs()
+        manager = _get_manager(
+            str(config_path), format, ask_password=False, auto_load=False
+        )
+        # List config files without loading them (don't prompt for passwords)
+        configs = manager.list_config_files()
 
         if not configs:
             if output == "json":
@@ -153,25 +171,30 @@ def list_command(config_dir: str | None, format: str | None, output: str) -> Non
                 console.print("No configurations found")
             return
 
+        # Get encryption status without prompting for passwords
+        encryption_status = manager.get_encryption_status()
+
         # Output based on format
         if output == "json":
             import json
 
             result = [
-                {"name": name, "encrypted": manager.is_encrypted()}
+                {"name": name, "encrypted": encryption_status.get(name, False)}
                 for name in sorted(configs)
             ]
             click.echo(json.dumps(result, indent=2))
         elif output == "plain":
             for name in sorted(configs):
-                click.echo(name)
+                prefix = "[E] " if encryption_status.get(name, False) else ""
+                click.echo(f"{prefix}{name}")
         else:  # table (default)
             table = Table(title="Configurations")
             table.add_column("Name", style="cyan")
             table.add_column("Encrypted", style="yellow")
 
             for name in sorted(configs):
-                encrypted = "Yes" if manager.is_encrypted() else "No"
+                is_encrypted = encryption_status.get(name, False)
+                encrypted = "Yes" if is_encrypted else "No"
                 table.add_row(name, encrypted)
 
             console.print(table)
@@ -256,16 +279,25 @@ def show_command(
 @click.option("--format", "-f", help="Config format")
 @click.option("--from-file", type=click.Path(exists=True), help="Import from file")
 @click.option("--interactive/--no-interactive", default=True, help="Interactive mode")
+@click.option("--encrypted", "-e", is_flag=True, help="Encrypt this config")
+@click.option("--password", "-p", help="Encryption password")
 def create_command(
     name: str,
     config_dir: str | None,
     format: str | None,
     from_file: str | None,
     interactive: bool,
+    encrypted: bool,
+    password: str | None,
 ) -> None:
     """Create a new configuration.
 
     Uses default config directory if not specified.
+
+    Examples:
+        vaultconfig create database --interactive
+        vaultconfig create api --encrypted
+        vaultconfig create secrets --encrypted --password "mypass"
     """
     try:
         config_path = _get_config_dir(config_dir)
@@ -364,7 +396,23 @@ def create_command(
 
         # Add configuration
         manager.add_config(name, config_data)
-        console.print(f"[green]✓[/green] Created config: {name}")
+
+        # Encrypt if requested
+        if encrypted:
+            if password is None:
+                password = click.prompt("Enter encryption password", hide_input=True)
+                confirm = click.prompt("Confirm password", hide_input=True)
+                if password != confirm:
+                    console.print("[red]Error:[/red] Passwords do not match")
+                    # Remove the config we just created
+                    manager.remove_config(name)
+                    sys.exit(1)
+
+            assert password is not None
+            manager.encrypt_config(name, password)
+            console.print(f"[green]✓[/green] Created encrypted config: {name}")
+        else:
+            console.print(f"[green]✓[/green] Created config: {name}")
 
     except KeyboardInterrupt:
         console.print("\n[yellow]Cancelled[/yellow]")
@@ -510,7 +558,7 @@ def get_command(
             value = config.get(key)
         else:
             # Get without revealing
-            data = config._data
+            data: Any = config._data
             keys = key.split(".")
             for k in keys:
                 if isinstance(data, dict):
@@ -602,16 +650,18 @@ def unset_command(
 
 
 @main.command(name="delete")
+@click.argument("name", required=True)
 @click.option(
     "--config-dir",
-    "-C",
+    "-d",
     type=click.Path(),
     help="Config directory (uses default if not specified)",
 )
-@click.argument("name", required=True)
 @click.option("--format", "-f", help="Config format")
-@click.confirmation_option(prompt="Are you sure you want to delete this config?")
-def delete_command(config_dir: str | None, name: str, format: str | None) -> None:
+@click.option("--yes", "-y", is_flag=True, help="Skip confirmation prompt")
+def delete_command(
+    config_dir: str | None, name: str, format: str | None, yes: bool
+) -> None:
     """Delete a configuration.
 
     Uses default config directory if not specified.
@@ -625,6 +675,17 @@ def delete_command(config_dir: str | None, name: str, format: str | None) -> Non
             sys.exit(1)
 
         manager = _get_manager(str(config_path), format)
+
+        # Check if config exists
+        if not manager.has_config(name):
+            console.print(f"[red]Error:[/red] Config '{name}' not found")
+            sys.exit(1)
+
+        # Confirm deletion
+        if not yes:
+            if not click.confirm(f"Are you sure you want to delete config '{name}'?"):
+                console.print("[yellow]Cancelled[/yellow]")
+                sys.exit(1)
 
         if manager.remove_config(name):
             console.print(f"[green]✓[/green] Deleted config: {name}")
@@ -999,24 +1060,141 @@ def export_env_command(
         sys.exit(1)
 
 
-@main.group()
-def encrypt() -> None:
-    """Manage config encryption."""
-    pass
-
-
-@encrypt.command(name="set")
+@main.command(name="encrypt-file")
+@click.argument("name", required=True)
 @click.option(
     "--config-dir",
-    "-C",
+    "-d",
     type=click.Path(),
     help="Config directory (uses default if not specified)",
 )
 @click.option("--format", "-f", help="Config format")
-def encrypt_set(config_dir: str | None, format: str | None) -> None:
-    """Set or change encryption password.
+@click.option("--password", "-p", help="Encryption password")
+def encrypt_single_command(
+    name: str, config_dir: str | None, format: str | None, password: str | None
+) -> None:
+    """Encrypt a specific config file.
 
     Uses default config directory if not specified.
+
+    Examples:
+        vaultconfig encrypt-file database
+        vaultconfig encrypt-file api --password "mypass"
+    """
+    try:
+        config_path = _get_config_dir(config_dir)
+        if not config_path.exists():
+            console.print(
+                f"[red]Error:[/red] Config directory not found: {config_path}"
+            )
+            sys.exit(1)
+
+        manager = _get_manager(
+            str(config_path), format, ask_password=False, auto_load=False
+        )
+
+        # Check if config file exists
+        config_file = manager._get_config_file(name)
+        if not config_file.exists():
+            console.print(f"[red]Error:[/red] Config '{name}' not found")
+            sys.exit(1)
+
+        # Load only this specific config
+        manager._load_config(name)
+
+        # Get password
+        if password is None:
+            password = click.prompt("Enter encryption password", hide_input=True)
+            confirm = click.prompt("Confirm password", hide_input=True)
+            if password != confirm:
+                console.print("[red]Error:[/red] Passwords do not match")
+                sys.exit(1)
+
+        # Validate password is not None after prompt
+        assert password is not None
+
+        # Encrypt config
+        manager.encrypt_config(name, password)
+        console.print(f"[green]✓[/green] Encrypted config: {name}")
+
+    except VaultConfigError as e:
+        console.print(f"[red]Error:[/red] {e}")
+        sys.exit(1)
+
+
+@main.command(name="decrypt-file")
+@click.argument("name", required=True)
+@click.option(
+    "--config-dir",
+    "-d",
+    type=click.Path(),
+    help="Config directory (uses default if not specified)",
+)
+@click.option("--format", "-f", help="Config format")
+def decrypt_command(name: str, config_dir: str | None, format: str | None) -> None:
+    """Decrypt a specific config file.
+
+    Uses default config directory if not specified.
+
+    Examples:
+        vaultconfig decrypt-file database
+    """
+    try:
+        config_path = _get_config_dir(config_dir)
+        if not config_path.exists():
+            console.print(
+                f"[red]Error:[/red] Config directory not found: {config_path}"
+            )
+            sys.exit(1)
+
+        manager = _get_manager(
+            str(config_path), format, ask_password=False, auto_load=False
+        )
+
+        # Check if config file exists
+        config_file = manager._get_config_file(name)
+        if not config_file.exists():
+            console.print(f"[red]Error:[/red] Config '{name}' not found")
+            sys.exit(1)
+
+        # Load only this specific config
+        manager._load_config(name)
+
+        # Decrypt config
+        manager.decrypt_config(name)
+        console.print(f"[green]✓[/green] Decrypted config: {name}")
+        console.print("[yellow]Note:[/yellow] Config is now stored as plaintext")
+
+    except VaultConfigError as e:
+        console.print(f"[red]Error:[/red] {e}")
+        sys.exit(1)
+
+
+@main.group(name="encrypt")
+def encrypt_group() -> None:
+    """Manage encryption for configs."""
+    pass
+
+
+@encrypt_group.command(name="set")
+@click.option(
+    "--config-dir",
+    "-d",
+    type=click.Path(),
+    help="Config directory (uses default if not specified)",
+)
+@click.option("--format", "-f", help="Config format")
+@click.option("--password", "-p", help="Encryption password")
+def encrypt_set_command(
+    config_dir: str | None, format: str | None, password: str | None
+) -> None:
+    """Set encryption password for all configs in directory.
+
+    Uses default config directory if not specified.
+
+    Examples:
+        vaultconfig encrypt set
+        vaultconfig encrypt set --password "mypass"
     """
     try:
         config_path = _get_config_dir(config_dir)
@@ -1028,39 +1206,208 @@ def encrypt_set(config_dir: str | None, format: str | None) -> None:
 
         manager = _get_manager(str(config_path), format, ask_password=False)
 
-        password = click.prompt("Enter new encryption password", hide_input=True)
-        confirm = click.prompt("Confirm password", hide_input=True)
+        if password is None:
+            password = click.prompt("Enter encryption password", hide_input=True)
+            confirm = click.prompt("Confirm password", hide_input=True)
 
-        if password != confirm:
-            console.print("[red]Error:[/red] Passwords do not match")
-            sys.exit(1)
+            if password != confirm:
+                console.print("[red]Error:[/red] Passwords do not match")
+                sys.exit(1)
 
+        assert password is not None
         manager.set_encryption_password(password)
-        console.print("[green]✓[/green] Encryption password updated")
+        console.print("[green]✓[/green] Encryption password updated for all configs")
 
     except VaultConfigError as e:
         console.print(f"[red]Error:[/red] {e}")
         sys.exit(1)
 
 
-@encrypt.command(name="remove")
+@encrypt_group.command(name="remove")
 @click.option(
     "--config-dir",
-    "-C",
+    "-d",
+    type=click.Path(),
+    help="Config directory (uses default if not specified)",
+)
+@click.option("--format", "-f", help="Config format")
+@click.option("--yes", "-y", is_flag=True, help="Skip confirmation prompt")
+def encrypt_remove_command(
+    config_dir: str | None, format: str | None, yes: bool
+) -> None:
+    """Remove encryption from all configs in directory.
+
+    Uses default config directory if not specified.
+
+    Examples:
+        vaultconfig encrypt remove
+    """
+    try:
+        config_path = _get_config_dir(config_dir)
+        if not config_path.exists():
+            console.print(
+                f"[red]Error:[/red] Config directory not found: {config_path}"
+            )
+            sys.exit(1)
+
+        # Confirm removal
+        if not yes:
+            if not click.confirm(
+                "Are you sure you want to remove encryption? "
+                "Configs will be stored as plaintext."
+            ):
+                console.print("[yellow]Cancelled[/yellow]")
+                sys.exit(1)
+
+        manager = _get_manager(str(config_path), format)
+        manager.remove_encryption()
+        console.print("[green]✓[/green] Encryption removed from all configs")
+        console.print("[yellow]Note:[/yellow] Configs are now stored as plaintext")
+
+    except VaultConfigError as e:
+        console.print(f"[red]Error:[/red] {e}")
+        sys.exit(1)
+
+
+@encrypt_group.command(name="check")
+@click.option(
+    "--config-dir",
+    "-d",
+    type=click.Path(),
+    help="Config directory (uses default if not specified)",
+)
+@click.option("--format", "-f", help="Config format")
+def encrypt_check_command(config_dir: str | None, format: str | None) -> None:
+    """Check encryption status for all configs.
+
+    Uses default config directory if not specified.
+
+    Examples:
+        vaultconfig encrypt check
+    """
+    try:
+        config_path = _get_config_dir(config_dir)
+        if not config_path.exists():
+            console.print(
+                f"[red]Error:[/red] Config directory not found: {config_path}"
+            )
+            sys.exit(1)
+
+        manager = _get_manager(
+            str(config_path), format, ask_password=False, auto_load=False
+        )
+        status = manager.get_encryption_status()
+
+        if not status:
+            console.print("No configurations found")
+            return
+
+        # Check if any are encrypted
+        encrypted_count = sum(1 for is_encrypted in status.values() if is_encrypted)
+        total_count = len(status)
+
+        if encrypted_count == 0:
+            console.print(
+                f"[yellow]All configs ({total_count}) are NOT encrypted[/yellow]"
+            )
+        elif encrypted_count == total_count:
+            console.print(f"[green]All configs ({total_count}) are encrypted[/green]")
+        else:
+            console.print(
+                f"[yellow]{encrypted_count}/{total_count} configs "
+                "are encrypted[/yellow]"
+            )
+
+        # Show status table
+        table = Table(title="Encryption Status")
+        table.add_column("Name", style="cyan")
+        table.add_column("Encrypted", style="yellow")
+
+        for name in sorted(status.keys()):
+            encrypted_status = "Yes" if status[name] else "No"
+            table.add_row(name, encrypted_status)
+
+        console.print(table)
+
+    except VaultConfigError as e:
+        console.print(f"[red]Error:[/red] {e}")
+        sys.exit(1)
+
+
+@main.group()
+def encryption() -> None:
+    """Manage encryption settings."""
+    pass
+
+
+@main.command(name="encrypt-dir")
+@click.option(
+    "--config-dir",
+    "-d",
+    type=click.Path(),
+    help="Config directory (uses default if not specified)",
+)
+@click.option("--format", "-f", help="Config format")
+@click.option("--password", "-p", help="Encryption password")
+def encrypt_dir_command(
+    config_dir: str | None, format: str | None, password: str | None
+) -> None:
+    """Encrypt all configs in directory with same password.
+
+    Uses default config directory if not specified.
+
+    Examples:
+        vaultconfig encrypt-dir
+        vaultconfig encrypt-dir --password "mypass"
+    """
+    try:
+        config_path = _get_config_dir(config_dir)
+        if not config_path.exists():
+            console.print(
+                f"[red]Error:[/red] Config directory not found: {config_path}"
+            )
+            sys.exit(1)
+
+        manager = _get_manager(str(config_path), format, ask_password=False)
+
+        if password is None:
+            password = click.prompt("Enter encryption password", hide_input=True)
+            confirm = click.prompt("Confirm password", hide_input=True)
+
+            if password != confirm:
+                console.print("[red]Error:[/red] Passwords do not match")
+                sys.exit(1)
+
+        assert password is not None
+        manager.set_encryption_password(password)
+        console.print("[green]✓[/green] All configs encrypted with directory password")
+
+    except VaultConfigError as e:
+        console.print(f"[red]Error:[/red] {e}")
+        sys.exit(1)
+
+
+@main.command(name="decrypt-dir")
+@click.option(
+    "--config-dir",
+    "-d",
     type=click.Path(),
     help="Config directory (uses default if not specified)",
 )
 @click.option("--format", "-f", help="Config format")
 @click.confirmation_option(
     prompt=(
-        "Are you sure you want to remove encryption? "
-        "Configs will be stored in plaintext."
+        "Are you sure you want to decrypt all configs? "
+        "They will be stored as plaintext."
     )
 )
-def encrypt_remove(config_dir: str | None, format: str | None) -> None:
-    """Remove encryption from all configs.
+def decrypt_dir_command(config_dir: str | None, format: str | None) -> None:
+    """Remove encryption from all configs in directory.
 
     Uses default config directory if not specified.
+
+    Examples:
+        vaultconfig decrypt-dir
     """
     try:
         config_path = _get_config_dir(config_dir)
@@ -1072,25 +1419,29 @@ def encrypt_remove(config_dir: str | None, format: str | None) -> None:
 
         manager = _get_manager(str(config_path), format)
         manager.remove_encryption()
-        console.print("[green]✓[/green] Encryption removed")
+        console.print("[green]✓[/green] All configs decrypted")
+        console.print("[yellow]Note:[/yellow] Configs are now stored as plaintext")
 
     except VaultConfigError as e:
         console.print(f"[red]Error:[/red] {e}")
         sys.exit(1)
 
 
-@encrypt.command(name="check")
+@encryption.command(name="status")
 @click.option(
     "--config-dir",
-    "-C",
+    "-d",
     type=click.Path(),
     help="Config directory (uses default if not specified)",
 )
 @click.option("--format", "-f", help="Config format")
-def encrypt_check(config_dir: str | None, format: str | None) -> None:
-    """Check if configs are encrypted.
+def encryption_status_command(config_dir: str | None, format: str | None) -> None:
+    """Show encryption status for all configs.
 
     Uses default config directory if not specified.
+
+    Examples:
+        vaultconfig encryption status
     """
     try:
         config_path = _get_config_dir(config_dir)
@@ -1100,12 +1451,31 @@ def encrypt_check(config_dir: str | None, format: str | None) -> None:
             )
             sys.exit(1)
 
-        manager = _get_manager(str(config_path), format, ask_password=False)
+        manager = _get_manager(
+            str(config_path), format, ask_password=False, auto_load=False
+        )
+        status = manager.get_encryption_status()
 
+        if not status:
+            console.print("No configurations found")
+            return
+
+        # Show status table
+        table = Table(title="Encryption Status")
+        table.add_column("Name", style="cyan")
+        table.add_column("Encrypted", style="yellow")
+
+        for name in sorted(status.keys()):
+            encrypted_status = "[E] Yes" if status[name] else "No"
+            table.add_row(name, encrypted_status)
+
+        console.print(table)
+
+        # Show directory-level status
         if manager.is_encrypted():
-            console.print("[green]✓[/green] Configs are encrypted")
-        else:
-            console.print("[yellow]![/yellow] Configs are NOT encrypted")
+            console.print(
+                "\n[yellow]Note:[/yellow] Directory-level encryption is enabled"
+            )
 
     except VaultConfigError as e:
         console.print(f"[red]Error:[/red] {e}")
@@ -1263,7 +1633,10 @@ def obscure_generate_key(output: str | None, from_passphrase: bool) -> None:
 
 
 def _get_manager(
-    config_dir: str, format: str | None = None, ask_password: bool = True
+    config_dir: str,
+    format: str | None = None,
+    ask_password: bool = True,
+    auto_load: bool = True,
 ) -> ConfigManager:
     """Get ConfigManager instance with password handling.
 
@@ -1271,11 +1644,14 @@ def _get_manager(
         config_dir: Config directory path
         format: Config format (autodetect if None)
         ask_password: If True, ask for password if needed
+            (deprecated, kept for compatibility)
+        auto_load: If True, automatically load all configs
+            (set False for list operations)
 
     Returns:
         ConfigManager instance
     """
-    from vaultconfig import crypt, obscure
+    from vaultconfig import obscure
 
     config_path = Path(config_dir)
 
@@ -1283,18 +1659,9 @@ def _get_manager(
     if format is None:
         format = _detect_format(config_path)
 
-    # Check if any config file is encrypted
-    password = None
-    if ask_password:
-        extension = {"toml": ".toml", "ini": ".ini", "yaml": ".yaml"}.get(
-            format, ".toml"
-        )
-
-        for config_file in config_path.glob(f"*{extension}"):
-            with open(config_file, "rb") as f:
-                if crypt.is_encrypted(f.read()):
-                    password = crypt.get_password()
-                    break
+    # Check for password in environment variable
+    # Don't prompt interactively - let individual operations decide
+    password = os.environ.get("VAULTCONFIG_PASSWORD")
 
     # Load custom cipher key if provided
     obscurer = None
@@ -1320,7 +1687,11 @@ def _get_manager(
             )
 
     return ConfigManager(
-        config_path, format=format, password=password, obscurer=obscurer
+        config_path,
+        format=format,
+        password=password,
+        obscurer=obscurer,
+        auto_load=auto_load,
     )
 
 
@@ -1481,7 +1852,7 @@ def _flatten_dict(data: dict, parent_key: str = "", sep: str = ".") -> dict:
     Returns:
         Flattened dictionary
     """
-    items = []
+    items: list[tuple[str, Any]] = []
     for key, value in data.items():
         new_key = f"{parent_key}{sep}{key}" if parent_key else key
         if isinstance(value, dict):
@@ -1543,13 +1914,13 @@ def _load_schema_from_file(schema_file: str) -> Any:
     # Expected format:
     # fields:
     #   host:
-    #     type: str
-    #     default: localhost
-    #     sensitive: false
+    #     type = "str"
+    #     default = "localhost"
+    #     sensitive = false
     #   password:
-    #     type: str
-    #     sensitive: true
-    #     required: true
+    #     type = "str"
+    #     sensitive = true
+    #     required = true
 
     if "fields" not in schema_data:
         raise ValueError("Schema file must contain a 'fields' key")

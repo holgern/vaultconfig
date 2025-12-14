@@ -209,53 +209,82 @@ Initialize a Config Directory
 
 .. code-block:: bash
 
-   # Basic initialization
-   vaultconfig init ./myapp-config
+   # Initialize default directory
+   vaultconfig init
+
+   # Initialize custom directory
+   vaultconfig init -d ./myapp-config
 
    # With specific format
-   vaultconfig init ./myapp-config --format yaml
+   vaultconfig init --format yaml
 
    # With encryption
-   vaultconfig init ./myapp-config --encrypt
+   vaultconfig init --encrypt
 
 List Configurations
 ~~~~~~~~~~~~~~~~~~~
 
 .. code-block:: bash
 
+   # List using default directory
+   vaultconfig list
+
+   # List specific directory
    vaultconfig list ./myapp-config
+
+   # or with option
+   vaultconfig list -d ./myapp-config
 
 Show a Configuration
 ~~~~~~~~~~~~~~~~~~~~
 
 .. code-block:: bash
 
-   # Show with obscured passwords
-   vaultconfig show ./myapp-config database
+   # Show with obscured passwords (uses default directory)
+   vaultconfig show database
 
    # Show with revealed passwords
-   vaultconfig show ./myapp-config database --reveal
+   vaultconfig show database --reveal
+
+   # Show from custom directory
+   vaultconfig show -d ./myapp-config database
 
 Delete a Configuration
 ~~~~~~~~~~~~~~~~~~~~~~
 
 .. code-block:: bash
 
-   vaultconfig delete ./myapp-config database
+   # Delete with confirmation
+   vaultconfig delete database
+
+   # Delete without confirmation
+   vaultconfig delete database --yes
+
+   # Delete from custom directory
+   vaultconfig delete -d ./myapp-config database
 
 Manage Encryption
 ~~~~~~~~~~~~~~~~~
 
 .. code-block:: bash
 
-   # Set encryption password
-   vaultconfig encrypt set ./myapp-config
+   # Set encryption password (uses default directory)
+   vaultconfig encrypt set
+
+   # Set for custom directory
+   vaultconfig encrypt set -d ./myapp-config
 
    # Remove encryption
-   vaultconfig encrypt remove ./myapp-config
+   vaultconfig encrypt remove
+
+   # Remove from custom directory
+   vaultconfig encrypt remove -d ./myapp-config
 
    # Check encryption status
-   vaultconfig encrypt check ./myapp-config
+   vaultconfig encrypt check
+
+   # Check custom directory
+   vaultconfig encrypt check -d ./myapp-config
 
 Configuration Formats
 ---------------------
