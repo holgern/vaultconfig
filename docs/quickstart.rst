@@ -311,6 +311,27 @@ Load a configuration and run a command with config values as environment variabl
 This is useful for running applications that expect configuration in environment
 variables without needing to manually export them.
 
+Export Environment Variables
+~~~~~~~~~~~~~~~~~~~~~~~~~~~~~
+
+Export configuration as shell-specific environment variables:
+
+.. code-block:: bash
+
+   # Auto-detect shell and export variables
+   eval $(vaultconfig export-env database)
+
+   # Fish shell
+   vaultconfig export-env database --shell fish | source
+
+   # Nushell
+   vaultconfig export-env database --shell nushell | save -f env.nu
+
+   # PowerShell
+   vaultconfig export-env database --shell powershell | Invoke-Expression
+
+Supports bash, zsh, fish, nushell, and powershell with automatic shell detection.
+
 Configuration Formats
 ---------------------
 

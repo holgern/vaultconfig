@@ -161,13 +161,40 @@ vaultconfig import database --from-file config.yaml --overwrite
 #### Environment Variables
 
 ```bash
-# Export as environment variables
+# Export as environment variables (auto-detects shell)
 vaultconfig export-env database --prefix DB_
 
-# Use in shell
+# Use in bash/zsh
 eval $(vaultconfig export-env database --prefix DB_ --reveal)
 echo $DB_HOST  # localhost
+
+# Use in fish
+vaultconfig export-env database --shell fish | source
+
+# Use in nushell
+vaultconfig export-env database --shell nushell | save -f env.nu
+source env.nu
+
+# Use in PowerShell
+vaultconfig export-env database --shell powershell | Invoke-Expression
+
+# Specify shell explicitly
+vaultconfig export-env database --shell bash
+vaultconfig export-env database --shell zsh
+vaultconfig export-env database --shell fish
+vaultconfig export-env database --shell nushell
+vaultconfig export-env database --shell powershell
 ```
+
+**Supported Shells:**
+
+- **bash** - Bash shell (default)
+- **zsh** - Zsh shell
+- **fish** - Fish shell
+- **nushell** - Nushell
+- **powershell** - PowerShell
+
+The shell type is auto-detected from your environment if not specified.
 
 #### Run Command with Config
 

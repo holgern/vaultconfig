@@ -418,3 +418,170 @@ def test_cli_run_command_no_command(cli_runner, config_dir):
     result = cli_runner.invoke(main, ["run", "test", "-d", str(config_dir)])
     assert result.exit_code == 2  # Click returns 2 for usage errors
     assert "Missing argument" in result.output
+
+
+def test_cli_export_env_bash(cli_runner, config_dir):
+    """Test export-env with bash format."""
+    manager = ConfigManager(config_dir)
+    manager.add_config(
+        "test", {"host": "localhost", "port": 5432}, obscure_passwords=False
+    )
+
+    result = cli_runner.invoke(
+        main, ["export-env", "test", "-C", str(config_dir), "--shell", "bash"]
+    )
+    assert result.exit_code == 0
+    assert "export HOST='localhost'" in result.output
+    assert "export PORT='5432'" in result.output
+
+
+def test_cli_export_env_zsh(cli_runner, config_dir):
+    """Test export-env with zsh format."""
+    manager = ConfigManager(config_dir)
+    manager.add_config(
+        "test", {"host": "localhost", "port": 5432}, obscure_passwords=False
+    )
+
+    result = cli_runner.invoke(
+        main, ["export-env", "test", "-C", str(config_dir), "--shell", "zsh"]
+    )
+    assert result.exit_code == 0
+    assert "export HOST='localhost'" in result.output
+    assert "export PORT='5432'" in result.output
+
+
+def test_cli_export_env_fish(cli_runner, config_dir):
+    """Test export-env with fish format."""
+    manager = ConfigManager(config_dir)
+    manager.add_config(
+        "test", {"host": "localhost", "port": 5432}, obscure_passwords=False
+    )
+
+    result = cli_runner.invoke(
+        main, ["export-env", "test", "-C", str(config_dir), "--shell", "fish"]
+    )
+    assert result.exit_code == 0
+    assert "set -gx HOST 'localhost'" in result.output
+    assert "set -gx PORT '5432'" in result.output
+
+
+def test_cli_export_env_nushell(cli_runner, config_dir):
+    """Test export-env with nushell format."""
+    manager = ConfigManager(config_dir)
+    manager.add_config(
+        "test", {"host": "localhost", "port": 5432}, obscure_passwords=False
+    )
+
+    result = cli_runner.invoke(
+        main, ["export-env", "test", "-C", str(config_dir), "--shell", "nushell"]
+    )
+    assert result.exit_code == 0
+    assert "$env.HOST = 'localhost'" in result.output
+    assert "$env.PORT = '5432'" in result.output
+
+
+def test_cli_export_env_powershell(cli_runner, config_dir):
+    """Test export-env with powershell format."""
+    manager = ConfigManager(config_dir)
+    manager.add_config(
+        "test", {"host": "localhost", "port": 5432}, obscure_passwords=False
+    )
+
+    result = cli_runner.invoke(
+        main, ["export-env", "test", "-C", str(config_dir), "--shell", "powershell"]
+    )
+    assert result.exit_code == 0
+    assert "$env:HOST = 'localhost'" in result.output
+    assert "$env:PORT = '5432'" in result.output
+
+
+def test_cli_export_env_with_prefix(cli_runner, config_dir):
+    """Test export-env with prefix option."""
+    manager = ConfigManager(config_dir)
+    manager.add_config(
+        "test", {"host": "localhost", "port": 5432}, obscure_passwords=False
+    )
+
+    result = cli_runner.invoke(
+        main,
+        [
+            "export-env",
+            "test",
+            "-C",
+            str(config_dir),
+            "--prefix",
+            "DB_",
+            "--shell",
+            "bash",
+        ],
+    )
+    assert result.exit_code == 0
+    assert "export DB_HOST='localhost'" in result.output
+    assert "export DB_PORT='5432'" in result.output
+
+
+def test_cli_export_env_nested(cli_runner, config_dir):
+    """Test export-env with nested configuration."""
+    manager = ConfigManager(config_dir)
+    manager.add_config(
+        "test",
+        {"database": {"host": "localhost", "port": 5432}},
+        obscure_passwords=False,
+    )
+
+    result = cli_runner.invoke(
+        main, ["export-env", "test", "-C", str(config_dir), "--shell", "nushell"]
+    )
+    assert result.exit_code == 0
+    assert "$env.DATABASE_HOST = 'localhost'" in result.output
+    assert "$env.DATABASE_PORT = '5432'" in result.output
+
+
+def test_cli_export_env_special_characters_nushell(cli_runner, config_dir):
+    """Test export-env with special characters in nushell format."""
+    manager = ConfigManager(config_dir)
+    manager.add_config("test", {"password": "my'pass\\word"}, obscure_passwords=False)
+
+    result = cli_runner.invoke(
+        main, ["export-env", "test", "-C", str(config_dir), "--shell", "nushell"]
+    )
+    assert result.exit_code == 0
+    # Nushell should escape backslash and single quote
+    assert "$env.PASSWORD = 'my\\'pass\\\\word'" in result.output
+
+
+def test_cli_export_env_special_characters_powershell(cli_runner, config_dir):
+    """Test export-env with special characters in powershell format."""
+    manager = ConfigManager(config_dir)
+    manager.add_config("test", {"password": "my'password"}, obscure_passwords=False)
+
+    result = cli_runner.invoke(
+        main, ["export-env", "test", "-C", str(config_dir), "--shell", "powershell"]
+    )
+    assert result.exit_code == 0
+    # PowerShell should double single quotes
+    assert "$env:PASSWORD = 'my''password'" in result.output
+
+
+def test_cli_export_env_config_not_found(cli_runner, config_dir):
+    """Test export-env with non-existent config."""
+    result = cli_runner.invoke(
+        main, ["export-env", "nonexistent", "-C", str(config_dir)]
+    )
+    assert result.exit_code == 1
+    assert "not found" in result.output
+
+
+def test_cli_export_env_autodetect_default(cli_runner, config_dir, monkeypatch):
+    """Test export-env with shell auto-detection defaulting to bash."""
+    manager = ConfigManager(config_dir)
+    manager.add_config("test", {"host": "localhost"}, obscure_passwords=False)
+
+    # Clear SHELL env var to test default
+    monkeypatch.delenv("SHELL", raising=False)
+    monkeypatch.delenv("PSModulePath", raising=False)
+
+    result = cli_runner.invoke(main, ["export-env", "test", "-C", str(config_dir)])
+    assert result.exit_code == 0
+    # Should default to bash format
+    assert "export HOST='localhost'" in result.output

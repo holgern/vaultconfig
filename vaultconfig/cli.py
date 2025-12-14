@@ -1007,6 +1007,14 @@ def import_command(
 @click.option(
     "--uppercase", "-u", is_flag=True, default=True, help="Convert keys to uppercase"
 )
+@click.option(
+    "--shell",
+    "-s",
+    type=click.Choice(
+        ["bash", "zsh", "fish", "nushell", "powershell"], case_sensitive=False
+    ),
+    help="Shell type (auto-detected if not specified)",
+)
 def export_env_command(
     name: str,
     config_dir: str | None,
@@ -1014,14 +1022,18 @@ def export_env_command(
     prefix: str,
     reveal: bool,
     uppercase: bool,
+    shell: str | None,
 ) -> None:
     """Export configuration as environment variables.
 
     Uses default config directory if not specified.
+    Supports bash, zsh, fish, nushell, and powershell.
 
     Examples:
         vaultconfig export-env database --prefix DB_
         eval $(vaultconfig export-env database --prefix DB_ --reveal)
+        vaultconfig export-env database --shell nushell | save -f env.nu
+        vaultconfig export-env database --shell fish | source
     """
     try:
         config_path = _get_config_dir(config_dir)
@@ -1044,16 +1056,20 @@ def export_env_command(
         # Flatten nested dictionaries
         flat_data = _flatten_dict(data)
 
+        # Detect shell if not specified
+        if shell is None:
+            shell = _detect_shell()
+
         # Export as environment variables
         for key, value in flat_data.items():
             # Convert key to env var format
-            env_key = key.replace(".", "_")
+            env_key = key.replace(".", "_").replace("-", "_")
             if uppercase:
                 env_key = env_key.upper()
             env_key = prefix + env_key
 
-            # Print export statement
-            click.echo(f"export {env_key}={_shell_quote(str(value))}")
+            # Print export statement for the specified shell
+            click.echo(_format_env_export(env_key, str(value), shell))
 
     except VaultConfigError as e:
         console.print(f"[red]Error:[/red] {e}")
@@ -1993,6 +2009,63 @@ def _shell_quote(value: str) -> str:
     """
     # Simple quoting: use single quotes and escape any single quotes in the value
     return f"'{value.replace(chr(39), chr(39) + chr(92) + chr(39) + chr(39))}'"
+
+
+def _detect_shell() -> str:
+    """Detect the current shell from environment.
+
+    Returns:
+        Shell name: bash, zsh, fish, nushell, powershell, or bash (default)
+    """
+    import os
+
+    # Check SHELL environment variable first
+    shell_path = os.environ.get("SHELL", "")
+    if shell_path:
+        shell_name = Path(shell_path).name
+        if shell_name in ["bash", "zsh", "fish", "nu", "nushell"]:
+            if shell_name == "nu":
+                return "nushell"
+            return shell_name
+
+    # Check for PowerShell
+    if os.environ.get("PSModulePath"):
+        return "powershell"
+
+    # Default to bash
+    return "bash"
+
+
+def _format_env_export(key: str, value: str, shell: str) -> str:
+    """Format an environment variable export for a specific shell.
+
+    Args:
+        key: Environment variable name
+        value: Environment variable value
+        shell: Shell type (bash, zsh, fish, nushell, powershell)
+
+    Returns:
+        Formatted export statement
+    """
+    if shell in ["bash", "zsh"]:
+        # Bash/Zsh: export KEY='value'
+        return f"export {key}={_shell_quote(value)}"
+    elif shell == "fish":
+        # Fish: set -gx KEY 'value'
+        return f"set -gx {key} {_shell_quote(value)}"
+    elif shell == "nushell":
+        # Nushell: $env.KEY = 'value'
+        # Nushell uses single quotes for strings, backslash for escaping
+        escaped = value.replace("\\", "\\\\").replace("'", "\\'")
+        return f"$env.{key} = '{escaped}'"
+    elif shell == "powershell":
+        # PowerShell: $env:KEY = 'value'
+        # PowerShell uses single quotes, double single quote to escape
+        escaped = value.replace("'", "''")
+        return f"$env:{key} = '{escaped}'"
+    else:
+        # Default to bash format
+        return f"export {key}={_shell_quote(value)}"
 
 
 def _load_schema_from_file(schema_file: str) -> Any:

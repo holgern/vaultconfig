@@ -637,6 +637,143 @@ it to be used in scripts and CI/CD pipelines:
    # If the command fails, the script stops
    vaultconfig run database python deploy.py || exit 1
 
+export-env Command
+------------------
+
+Export configuration as environment variables in shell-specific format.
+
+Syntax
+~~~~~~
+
+.. code-block:: bash
+
+   vaultconfig export-env [OPTIONS] NAME
+
+Arguments
+~~~~~~~~~
+
+- ``NAME`` - Name of the configuration to export
+
+Options
+~~~~~~~
+
+- ``-C, --config-dir PATH`` - Config directory (uses default if not specified)
+- ``-f, --format TEXT`` - Config format (autodetected if not specified)
+- ``-p, --prefix TEXT`` - Prefix for environment variable names (default: "")
+- ``-r, --reveal`` - Reveal obscured passwords
+- ``-u, --uppercase`` - Convert keys to uppercase (default: true)
+- ``-s, --shell TEXT`` - Shell type: bash, zsh, fish, nushell, powershell (auto-detected if not specified)
+- ``--help`` - Show help message
+
+Supported Shells
+~~~~~~~~~~~~~~~~
+
+The ``export-env`` command supports multiple shell formats:
+
+- **bash** - Bash shell (``export KEY='value'``)
+- **zsh** - Zsh shell (``export KEY='value'``)
+- **fish** - Fish shell (``set -gx KEY 'value'``)
+- **nushell** - Nushell (``$env.KEY = 'value'``)
+- **powershell** - PowerShell (``$env:KEY = 'value'``)
+
+If no shell is specified, the command auto-detects your shell from the ``SHELL``
+environment variable.
+
+Examples
+~~~~~~~~
+
+Basic usage with auto-detection:
+
+.. code-block:: bash
+
+   vaultconfig export-env database
+
+For Bash/Zsh:
+
+.. code-block:: bash
+
+   # Export and evaluate in current shell
+   eval $(vaultconfig export-env database --prefix DB_)
+   echo $DB_HOST
+
+   # With revealed passwords
+   eval $(vaultconfig export-env database --reveal)
+
+For Fish:
+
+.. code-block:: bash
+
+   # Source directly
+   vaultconfig export-env database --shell fish | source
+
+   # With prefix
+   vaultconfig export-env database --prefix DB_ --shell fish | source
+
+For Nushell:
+
+.. code-block:: bash
+
+   # Save to file and source
+   vaultconfig export-env database --shell nushell | save -f env.nu
+   source env.nu
+
+   # Or use directly
+   vaultconfig export-env database --shell nushell | lines | each { |line| nu -c $line }
+
+For PowerShell:
+
+.. code-block:: bash
+
+   # Invoke directly
+   vaultconfig export-env database --shell powershell | Invoke-Expression
+
+   # With prefix
+   vaultconfig export-env database --prefix APP_ --shell powershell | Invoke-Expression
+
+Practical Examples
+~~~~~~~~~~~~~~~~~~
+
+**Set database credentials in current shell:**
+
+.. code-block:: bash
+
+   # Bash/Zsh
+   eval $(vaultconfig export-env production-db --prefix DB_ --reveal)
+   psql -h $DB_HOST -U $DB_USERNAME
+
+   # Fish
+   vaultconfig export-env production-db --prefix DB_ --reveal --shell fish | source
+   psql -h $DB_HOST -U $DB_USERNAME
+
+**Export for CI/CD:**
+
+.. code-block:: bash
+
+   # GitHub Actions, GitLab CI (bash)
+   eval $(vaultconfig export-env ci-secrets --reveal)
+
+   # Azure Pipelines (PowerShell)
+   vaultconfig export-env ci-secrets --reveal --shell powershell | Invoke-Expression
+
+**Use with Docker:**
+
+.. code-block:: bash
+
+   # Create .env file for Docker Compose
+   vaultconfig export-env docker-config --shell bash | sed 's/export //' > .env
+   docker-compose up
+
+Shell Auto-Detection
+~~~~~~~~~~~~~~~~~~~~
+
+The command detects your shell in the following order:
+
+1. Check ``SHELL`` environment variable for bash, zsh, fish, nu/nushell
+2. Check ``PSModulePath`` environment variable for PowerShell
+3. Default to bash format if detection fails
+
+You can always override auto-detection with the ``--shell`` option.
+
 Format Autodetection
 --------------------
 
