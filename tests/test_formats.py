@@ -571,3 +571,43 @@ class TestFormatEdgeCases:
         # Should parse (empty dict)
         result = toml_handler.load(toml_comments)
         assert result == {}
+
+
+class TestOptionalDependencyBranches:
+    """Tests for error handling when optional dependencies are missing."""
+
+    def test_yaml_load_requires_pyyaml(self, monkeypatch):
+        from vaultconfig.formats import yaml_format
+
+        handler = yaml_format.YAMLFormat()
+        monkeypatch.setattr(yaml_format, "HAS_YAML", False)
+
+        with pytest.raises(Exception, match="PyYAML"):
+            handler.load("a: 1")
+
+    def test_yaml_dump_requires_pyyaml(self, monkeypatch):
+        from vaultconfig.formats import yaml_format
+
+        handler = yaml_format.YAMLFormat()
+        monkeypatch.setattr(yaml_format, "HAS_YAML", False)
+
+        with pytest.raises(Exception, match="PyYAML"):
+            handler.dump({"a": 1})
+
+    def test_toml_dump_requires_tomli_w(self, monkeypatch):
+        from vaultconfig.formats import toml_format
+
+        handler = toml_format.TOMLFormat()
+        monkeypatch.setattr(toml_format, "tomli_w", None)
+
+        with pytest.raises(Exception, match="tomli-w"):
+            handler.dump({"a": 1})
+
+    def test_toml_load_requires_toml_library(self, monkeypatch):
+        from vaultconfig.formats import toml_format
+
+        handler = toml_format.TOMLFormat()
+        monkeypatch.setattr(toml_format, "tomllib", None)
+
+        with pytest.raises(Exception, match="tomli"):
+            handler.load("a = 1")

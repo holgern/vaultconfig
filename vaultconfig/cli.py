@@ -12,8 +12,17 @@ import click
 from rich.console import Console
 from rich.table import Table
 
+from vaultconfig._version import __version__
 from vaultconfig.config import ConfigManager
+from vaultconfig.env_export import (
+    detect_shell,
+    filter_dict,
+    flatten_dict,
+    format_env_export,
+    format_nushell_load_env,
+)
 from vaultconfig.exceptions import VaultConfigError
+from vaultconfig.io import dump_mapping, load_mapping_file
 
 console = Console()
 
@@ -65,7 +74,7 @@ def _get_config_dir(config_dir: str | None) -> Path:
 
 
 @click.group()
-@click.version_option()
+@click.version_option(version=__version__, prog_name="vaultconfig")
 def main() -> None:
     """VaultConfig - Secure configuration management with encryption support."""
     pass
@@ -320,43 +329,19 @@ def create_command(
             sys.exit(1)
 
         config_data = {}
-
         if from_file:
             # Import from file
-            import json
-            from pathlib import Path
-
             file_path = Path(from_file)
-            content = file_path.read_text()
 
-            # Detect format from extension or content
-            if file_path.suffix == ".json":
-                config_data = json.loads(content)
-            elif file_path.suffix in [".yaml", ".yml"]:
-                manager._format_handler = (
-                    manager._format_handler or _get_format_handler("yaml")
+            try:
+                config_data = load_mapping_file(file_path)
+            except Exception as e:
+                console.print(
+                    "[red]Error:[/red] Could not detect file format. "
+                    "Use .json, .yaml, .toml, or .ini extension"
                 )
-                config_data = manager._format_handler.load(content)
-            elif file_path.suffix == ".toml":
-                manager._format_handler = (
-                    manager._format_handler or _get_format_handler("toml")
-                )
-                config_data = manager._format_handler.load(content)
-            elif file_path.suffix == ".ini":
-                manager._format_handler = (
-                    manager._format_handler or _get_format_handler("ini")
-                )
-                config_data = manager._format_handler.load(content)
-            else:
-                # Try to parse as JSON by default
-                try:
-                    config_data = json.loads(content)
-                except json.JSONDecodeError:
-                    console.print(
-                        "[red]Error:[/red] Could not detect file format. "
-                        "Use .json, .yaml, .toml, or .ini extension"
-                    )
-                    sys.exit(1)
+                console.print(f"Details: {e}")
+                sys.exit(1)
 
         elif interactive:
             # Interactive mode
@@ -876,29 +861,12 @@ def export_command(
         data = config.get_all(reveal_secrets=reveal)
 
         # Filter data based on include/exclude patterns
-        data = _filter_dict(
+        data = filter_dict(
             data, include if include else None, exclude if exclude else None
         )
 
         # Export in requested format
-        if export_format == "json":
-            import json
-
-            output_str = json.dumps(data, indent=2)
-        elif export_format == "yaml":
-            handler = _get_format_handler("yaml")
-            output_str = handler.dump(data)
-        elif export_format == "toml":
-            handler = _get_format_handler("toml")
-            output_str = handler.dump(data)
-        elif export_format == "ini":
-            handler = _get_format_handler("ini")
-            output_str = handler.dump(data)
-        else:
-            console.print(
-                f"[red]Error:[/red] Unsupported export format: {export_format}"
-            )
-            sys.exit(1)
+        output_str = dump_mapping(data, export_format)
 
         # Output to file or stdout
         if output:
@@ -968,44 +936,9 @@ def import_command(
             console.print("Use --overwrite to replace it")
             sys.exit(1)
 
-        # Read file
+        # Read and parse file
         file_path = Path(from_file)
-        content = file_path.read_text()
-
-        # Detect format if not specified
-        if import_format is None:
-            ext = file_path.suffix.lower()
-            if ext == ".json":
-                import_format = "json"
-            elif ext in [".yaml", ".yml"]:
-                import_format = "yaml"
-            elif ext == ".toml":
-                import_format = "toml"
-            elif ext == ".ini":
-                import_format = "ini"
-            else:
-                # Try JSON by default
-                import_format = "json"
-
-        # Parse content
-        if import_format == "json":
-            import json
-
-            config_data = json.loads(content)
-        elif import_format == "yaml":
-            handler = _get_format_handler("yaml")
-            config_data = handler.load(content)
-        elif import_format == "toml":
-            handler = _get_format_handler("toml")
-            config_data = handler.load(content)
-        elif import_format == "ini":
-            handler = _get_format_handler("ini")
-            config_data = handler.load(content)
-        else:
-            console.print(
-                f"[red]Error:[/red] Unsupported import format: {import_format}"
-            )
-            sys.exit(1)
+        config_data = load_mapping_file(file_path, import_format)
 
         # Add configuration
         manager.add_config(name, config_data)
@@ -1108,16 +1041,16 @@ def export_env_command(
         data = config.get_all(reveal_secrets=reveal)
 
         # Filter data based on include/exclude patterns
-        data = _filter_dict(
+        data = filter_dict(
             data, include if include else None, exclude if exclude else None
         )
 
         # Flatten nested dictionaries
-        flat_data = _flatten_dict(data)
+        flat_data = flatten_dict(data)
 
         # Detect shell if not specified (only needed if not dry-run)
         if shell is None and not dry_run:
-            shell = _detect_shell()
+            shell = detect_shell()
 
         # Show preview or export as environment variables
         if dry_run:
@@ -1131,7 +1064,7 @@ def export_env_command(
             table.add_column("Value", style="green")
 
             # Detect shell for copyable format
-            shell_type = shell if shell is not None else _detect_shell()
+            shell_type = shell if shell is not None else detect_shell()
 
             # Build list of export commands for copyable format
             export_commands = []
@@ -1158,7 +1091,7 @@ def export_env_command(
                 # Add to export commands (for non-nushell shells)
                 if shell_type != "nushell":
                     export_commands.append(
-                        _format_env_export(env_key, value_str, shell_type)
+                        format_env_export(env_key, value_str, shell_type)
                     )
 
             console.print(table)
@@ -1171,7 +1104,7 @@ def export_env_command(
             # Create a syntax-highlighted code block
             if shell_type == "nushell":
                 # For nushell, show the complete load-env command for copying
-                record = _format_nushell_load_env(env_vars_dict)
+                record = format_nushell_load_env(env_vars_dict)
                 code = f"load-env {record}"
             else:
                 code = "\n".join(export_commands)
@@ -1264,11 +1197,11 @@ def export_env_command(
 
             # For nushell, use load-env command format
             if shell_type == "nushell":
-                click.echo(_format_nushell_load_env(env_vars))
+                click.echo(format_nushell_load_env(env_vars))
             else:
                 # For other shells, print individual export statements
                 for env_key, value in env_vars.items():
-                    click.echo(_format_env_export(env_key, value, shell_type))
+                    click.echo(format_env_export(env_key, value, shell_type))
 
     except VaultConfigError as e:
         console.print(f"[red]Error:[/red] {e}")
@@ -1344,7 +1277,7 @@ def run_command(
         data = config.get_all(reveal_secrets=reveal)
 
         # Flatten nested dictionaries
-        flat_data = _flatten_dict(data)
+        flat_data = flatten_dict(data)
 
         # Build environment variables dict
         env_vars = {}
@@ -2176,181 +2109,6 @@ def _get_format_handler(format_name: str) -> Any:
     return handlers[format_name]()
 
 
-def _flatten_dict(data: dict, parent_key: str = "", sep: str = ".") -> dict:
-    """Flatten a nested dictionary.
-
-    Args:
-        data: Dictionary to flatten
-        parent_key: Parent key prefix
-        sep: Separator for nested keys
-
-    Returns:
-        Flattened dictionary
-    """
-    items: list[tuple[str, Any]] = []
-    for key, value in data.items():
-        new_key = f"{parent_key}{sep}{key}" if parent_key else key
-        if isinstance(value, dict):
-            items.extend(_flatten_dict(value, new_key, sep).items())
-        else:
-            items.append((new_key, value))
-    return dict(items)
-
-
-def _filter_dict(
-    data: dict, include: tuple[str, ...] | None, exclude: tuple[str, ...] | None
-) -> dict:
-    """Filter a dictionary based on include and exclude patterns.
-
-    Args:
-        data: Dictionary to filter (can be nested)
-        include: Tuple of key patterns to include (supports dot notation and wildcards)
-        exclude: Tuple of key patterns to exclude (supports dot notation and wildcards)
-
-    Returns:
-        Filtered dictionary
-
-    Note:
-        - If include is specified, only matching keys are included
-        - If exclude is specified, matching keys are removed
-        - Exclude takes precedence over include
-        - Patterns support wildcards: "database.*" matches all keys starting
-          with "database."
-    """
-    import fnmatch
-
-    # If no filters, return as-is
-    if not include and not exclude:
-        return data
-
-    # Flatten the dictionary to work with full key paths
-    flat_data = _flatten_dict(data)
-    filtered_flat: dict[str, Any] = {}
-
-    for key, value in flat_data.items():
-        # Check include patterns
-        included = True
-        if include:
-            included = any(fnmatch.fnmatch(key, pattern) for pattern in include)
-
-        # Check exclude patterns (takes precedence)
-        excluded = False
-        if exclude:
-            excluded = any(fnmatch.fnmatch(key, pattern) for pattern in exclude)
-
-        # Add if included and not excluded
-        if included and not excluded:
-            filtered_flat[key] = value
-
-    # Reconstruct nested dictionary from filtered flat data
-    result: dict[str, Any] = {}
-    for key, value in filtered_flat.items():
-        keys = key.split(".")
-        current = result
-        for k in keys[:-1]:
-            if k not in current:
-                current[k] = {}
-            current = current[k]
-        current[keys[-1]] = value
-
-    return result
-
-
-def _shell_quote(value: str) -> str:
-    """Quote a string for safe use in shell export statements.
-
-    Args:
-        value: String to quote
-
-    Returns:
-        Quoted string safe for shell
-    """
-    # Simple quoting: use single quotes and escape any single quotes in the value
-    return f"'{value.replace(chr(39), chr(39) + chr(92) + chr(39) + chr(39))}'"
-
-
-def _detect_shell() -> str:
-    """Detect the current shell from environment.
-
-    Returns:
-        Shell name: bash, zsh, fish, nushell, powershell, or bash (default)
-    """
-    import os
-
-    # Check SHELL environment variable first
-    shell_path = os.environ.get("SHELL", "")
-    if shell_path:
-        shell_name = Path(shell_path).name
-        if shell_name in ["bash", "zsh", "fish", "nu", "nushell"]:
-            if shell_name == "nu":
-                return "nushell"
-            return shell_name
-
-    # Check for PowerShell
-    if os.environ.get("PSModulePath"):
-        return "powershell"
-
-    # Default to bash
-    return "bash"
-
-
-def _format_env_export(key: str, value: str, shell: str) -> str:
-    """Format an environment variable export for a specific shell.
-
-    Args:
-        key: Environment variable name
-        value: Environment variable value
-        shell: Shell type (bash, zsh, fish, nushell, powershell)
-
-    Returns:
-        Formatted export statement
-
-    Note:
-        For nushell with multiple variables, use _format_nushell_load_env instead.
-    """
-    if shell in ["bash", "zsh"]:
-        # Bash/Zsh: export KEY='value'
-        return f"export {key}={_shell_quote(value)}"
-    elif shell == "fish":
-        # Fish: set -gx KEY 'value'
-        return f"set -gx {key} {_shell_quote(value)}"
-    elif shell == "nushell":
-        # Nushell: $env.KEY = 'value'
-        # Nushell uses single quotes for strings, backslash for escaping
-        escaped = value.replace("\\", "\\\\").replace("'", "\\'")
-        return f"$env.{key} = '{escaped}'"
-    elif shell == "powershell":
-        # PowerShell: $env:KEY = 'value'
-        # PowerShell uses single quotes, double single quote to escape
-        escaped = value.replace("'", "''")
-        return f"$env:{key} = '{escaped}'"
-    else:
-        # Default to bash format
-        return f"export {key}={_shell_quote(value)}"
-
-
-def _format_nushell_load_env(env_vars: dict[str, str]) -> str:
-    """Format environment variables for nushell's load-env command.
-
-    Args:
-        env_vars: Dictionary of environment variable names and values
-
-    Returns:
-        Nushell record that can be piped directly to load-env
-        Format: { "KEY1": "value1", "KEY2": "value2" }
-    """
-    import json
-
-    if not env_vars:
-        return "{}"
-
-    # Output as a nushell record (which is JSON-like)
-    # This can be used both ways:
-    # 1. Piped: vaultconfig export-env name --shell nushell | load-env
-    # 2. Copied: load-env { "KEY": "value" }
-    return json.dumps(env_vars)
-
-
 def _load_schema_from_file(schema_file: str) -> Any:
     """Load schema from YAML or JSON file.
 
@@ -2366,25 +2124,7 @@ def _load_schema_from_file(schema_file: str) -> Any:
     from vaultconfig.schema import FieldDef, create_simple_schema
 
     schema_path = Path(schema_file)
-    content = schema_path.read_text()
-
-    # Parse file based on extension
-    if schema_path.suffix in [".yaml", ".yml"]:
-        handler = _get_format_handler("yaml")
-        schema_data = handler.load(content)
-    elif schema_path.suffix == ".json":
-        import json
-
-        schema_data = json.loads(content)
-    else:
-        # Try JSON first, then YAML
-        import json
-
-        try:
-            schema_data = json.loads(content)
-        except json.JSONDecodeError:
-            handler = _get_format_handler("yaml")
-            schema_data = handler.load(content)
+    schema_data = load_mapping_file(schema_path)
 
     # Convert schema data to FieldDef format
     # Expected format:

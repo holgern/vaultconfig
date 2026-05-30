@@ -166,3 +166,38 @@ class TestObscureErrors:
 
         with pytest.raises(ValueError):
             obscure.reveal(too_short)
+
+
+class TestOptionalDependencyBranches:
+    """Tests for error handling when cryptography is missing."""
+
+    def test_obscure_requires_cryptography(self, monkeypatch):
+        from vaultconfig import obscure
+
+        monkeypatch.setattr(obscure, "HAS_CRYPTOGRAPHY", False)
+
+        with pytest.raises(ImportError, match="cryptography"):
+            obscure.obscure("mypassword")
+
+    def test_reveal_requires_cryptography(self, monkeypatch):
+        from vaultconfig import obscure
+
+        obscurer = obscure.Obscurer()
+
+        # First obscure with cryptography available to get a valid obscured string
+        obscured = obscurer.obscure("mypassword")
+
+        monkeypatch.setattr(obscure, "HAS_CRYPTOGRAPHY", False)
+
+        with pytest.raises(ImportError, match="cryptography"):
+            obscurer.reveal(obscured)
+
+    def test_is_obscured_no_cryptography_returns_false(self, monkeypatch):
+        from vaultconfig import obscure
+
+        obscurer = obscure.Obscurer()
+        obscured = obscurer.obscure("mypassword")
+
+        monkeypatch.setattr(obscure, "HAS_CRYPTOGRAPHY", False)
+
+        assert obscurer.is_obscured(obscured) is False

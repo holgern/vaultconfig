@@ -25,6 +25,39 @@ except ImportError:
 from vaultconfig.exceptions import SchemaValidationError
 
 
+def _get_sensitive_fields_for_model(model: Any, prefix: str = "") -> set[str]:
+    """Recursively discover sensitive fields in a Pydantic model.
+
+    Args:
+        model: Pydantic BaseModel class.
+        prefix: Dotted prefix for nested models.
+
+    Returns:
+        Set of dotted field paths marked as sensitive.
+    """
+    sensitive: set[str] = set()
+
+    if not HAS_PYDANTIC or not hasattr(model, "model_fields"):
+        return sensitive
+
+    for field_name, field_info in model.model_fields.items():
+        full_name = f"{prefix}.{field_name}" if prefix else field_name
+
+        extra = field_info.json_schema_extra or {}
+        if isinstance(extra, dict) and extra.get("sensitive", False):
+            sensitive.add(full_name)
+
+        annotation = field_info.annotation
+        if annotation is not None:
+            try:
+                if isinstance(annotation, type) and issubclass(annotation, BaseModel):
+                    sensitive |= _get_sensitive_fields_for_model(annotation, full_name)
+            except TypeError:
+                pass
+
+    return sensitive
+
+
 class ConfigSchema:
     """Schema for configuration validation.
 
@@ -71,25 +104,18 @@ class ConfigSchema:
             raise SchemaValidationError(f"Validation error: {e}") from e
 
     def get_sensitive_fields(self) -> set[str]:
-        """Get list of sensitive field names that should be obscured.
+        """Get set of sensitive field names that should be obscured.
+
+        Recursively discovers sensitive fields in nested Pydantic models,
+        returning dotted paths (e.g., ``'database.password'``).
 
         Returns:
-            Set of field names marked as sensitive
+            Set of dotted field paths marked as sensitive.
         """
-        sensitive: set[str] = set()
-
         if not HAS_PYDANTIC:
-            return sensitive
+            return set()
 
-        # Iterate through model fields
-        for field_name, field_info in self.model.model_fields.items():
-            # Check if field has 'sensitive' in metadata
-            if field_info.json_schema_extra:
-                if isinstance(field_info.json_schema_extra, dict):
-                    if field_info.json_schema_extra.get("sensitive", False):
-                        sensitive.add(field_name)
-
-        return sensitive
+        return _get_sensitive_fields_for_model(self.model)
 
     def get_defaults(self) -> dict[str, Any]:
         """Get default values for all fields.

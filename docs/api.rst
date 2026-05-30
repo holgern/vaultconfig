@@ -149,9 +149,9 @@ Encryption Header
 
 Encrypted files start with this header::
 
-   VAULTCONFIG_ENCRYPT_V0:
+   VAULTCONFIG_ENCRYPT_V1:
 
-Format: ``VAULTCONFIG_ENCRYPT_V0:<base64-encoded-encrypted-data>``
+Format: ``VAULTCONFIG_ENCRYPT_V1:<base64-encoded salt + encrypted data>``
 
 File Extensions
 ^^^^^^^^^^^^^^^

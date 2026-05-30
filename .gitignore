@@ -207,3 +207,4 @@ marimo/_lsp/
 __marimo__/
 vaultconfig/_version.py
 context_vaultconfig*
+todo.md

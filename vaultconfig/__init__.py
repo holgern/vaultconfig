@@ -10,6 +10,7 @@ VaultConfig provides easy-to-use configuration management with support for:
 
 from __future__ import annotations
 
+from vaultconfig._version import __version__
 from vaultconfig import crypt, obscure
 from vaultconfig.config import ConfigEntry, ConfigManager
 from vaultconfig.exceptions import (
@@ -29,8 +30,6 @@ from vaultconfig.obscure import (
     create_obscurer_from_passphrase,
 )
 from vaultconfig.schema import ConfigSchema, FieldDef, create_simple_schema
-
-__version__ = "0.1.0"
 
 __all__ = [
     # Core classes

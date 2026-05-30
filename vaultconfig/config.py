@@ -5,7 +5,7 @@ from __future__ import annotations
 import logging
 import os
 import tempfile
-from pathlib import Path
+from pathlib import Path, PurePath
 from typing import Any
 
 from vaultconfig import crypt, obscure
@@ -26,6 +26,56 @@ _FORMAT_REGISTRY: dict[str, type[ConfigFormat]] = {
     "ini": INIFormat,
     "yaml": YAMLFormat,
 }
+
+
+def _obscure_nested_value(
+    data: dict[str, Any], field: str, obscurer: obscure.Obscurer
+) -> None:
+    """Obscure a value at a potentially nested (dotted) key path.
+
+    Modifies ``data`` in place. Silently skips if the key path does not
+    resolve to a string value or the value is already obscured.
+
+    Args:
+        data: Configuration dictionary (mutated in place).
+        field: Dotted key path (e.g., ``'database.password'``).
+        obscurer: Obscurer instance.
+    """
+    keys = field.split(".")
+    current: Any = data
+
+    for k in keys[:-1]:
+        if not isinstance(current, dict) or k not in current:
+            return
+        current = current[k]
+
+    leaf_key = keys[-1]
+    if not isinstance(current, dict) or leaf_key not in current:
+        return
+
+    value = current[leaf_key]
+    if isinstance(value, str) and not obscurer.is_obscured(value):
+        current[leaf_key] = obscurer.obscure(value)
+
+
+def _validate_config_name(name: str) -> str:
+    """Validate and normalize a config name."""
+    if not isinstance(name, str):
+        raise FormatError("Config name must be a string")
+
+    normalized = name.strip()
+    if not normalized:
+        raise FormatError("Config name cannot be empty")
+
+    path = PurePath(normalized)
+    if path.is_absolute() or len(path.parts) != 1 or ".." in path.parts:
+        raise FormatError(f"Invalid config name: {name!r}")
+
+    # Normalize behavior across platforms: reject all path separators.
+    if "/" in normalized or "\\" in normalized:
+        raise FormatError(f"Invalid config name: {name!r}")
+
+    return normalized
 
 
 def _secure_write_file(path: Path, data: bytes) -> None:
@@ -272,8 +322,9 @@ class ConfigManager:
         Returns:
             Path to config file
         """
+        safe_name = _validate_config_name(name)
         extension = self._format_handler.get_extension()
-        return self.config_dir / f"{name}{extension}"
+        return self.config_dir / f"{safe_name}{extension}"
 
     def _load_all(self) -> None:
         """Load all configuration files from directory."""
@@ -420,7 +471,8 @@ class ConfigManager:
         Returns:
             ConfigEntry or None if not found
         """
-        return self._configs.get(name)
+        safe_name = _validate_config_name(name)
+        return self._configs.get(safe_name)
 
     def has_config(self, name: str) -> bool:
         """Check if a config exists.
@@ -431,7 +483,8 @@ class ConfigManager:
         Returns:
             True if config exists
         """
-        return name in self._configs
+        safe_name = _validate_config_name(name)
+        return safe_name in self._configs
 
     def add_config(
         self,
@@ -450,8 +503,7 @@ class ConfigManager:
             ConfigExistsError: If config exists and you want to prevent overwrite
             FormatError: If config format is invalid
         """
-        if not name:
-            raise ValueError("Config name cannot be empty")
+        safe_name = _validate_config_name(name)
 
         # Validate schema if provided
         if self.schema:
@@ -466,17 +518,14 @@ class ConfigManager:
         if obscure_passwords and sensitive_fields:
             config = config.copy()
             for field in sensitive_fields:
-                if field in config and isinstance(config[field], str):
-                    # Check if already obscured
-                    if not self._obscurer.is_obscured(config[field]):
-                        config[field] = self._obscurer.obscure(config[field])
+                _obscure_nested_value(config, field, self._obscurer)
 
-        self._configs[name] = ConfigEntry(
-            name, config, sensitive_fields, self._obscurer
+        self._configs[safe_name] = ConfigEntry(
+            safe_name, config, sensitive_fields, self._obscurer
         )
-        self._save_config(name)
+        self._save_config(safe_name)
 
-        logger.info(f"Added config '{name}'")
+        logger.info(f"Added config '{safe_name}'")
 
     def remove_config(self, name: str) -> bool:
         """Remove a configuration.
@@ -487,16 +536,18 @@ class ConfigManager:
         Returns:
             True if config was removed, False if not found
         """
-        if name not in self._configs:
+        safe_name = _validate_config_name(name)
+
+        if safe_name not in self._configs:
             return False
 
         # Delete file
-        config_file = self._get_config_file(name)
+        config_file = self._get_config_file(safe_name)
         if config_file.exists():
             config_file.unlink()
 
-        del self._configs[name]
-        logger.info(f"Removed config '{name}'")
+        del self._configs[safe_name]
+        logger.info(f"Removed config '{safe_name}'")
         return True
 
     def set_encryption_password(self, password: str) -> None:
@@ -526,6 +577,7 @@ class ConfigManager:
     def remove_encryption(self) -> None:
         """Remove encryption from all configs."""
         self._password = None
+        self._config_passwords.clear()
 
         # Re-save all configs without encryption
         for name in self.list_configs():
@@ -579,8 +631,14 @@ class ConfigManager:
         if name in self._config_passwords:
             del self._config_passwords[name]
 
-        # Re-save config (will be saved unencrypted)
-        self._save_config(name)
+        # Force a plaintext write for this config, even if directory-level
+        # encryption is currently enabled.
+        original_password = self._password
+        self._password = None
+        try:
+            self._save_config(name)
+        finally:
+            self._password = original_password
 
         logger.info(f"Decrypted config '{name}'")
 

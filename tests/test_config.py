@@ -186,9 +186,20 @@ def test_config_manager_add_config_already_obscured(config_dir, sample_schema):
 def test_config_manager_add_config_empty_name(config_dir):
     """Test that empty config name raises error."""
     manager = ConfigManager(config_dir)
-    with pytest.raises(ValueError) as exc_info:
+    with pytest.raises(FormatError) as exc_info:
         manager.add_config("", {})
     assert "cannot be empty" in str(exc_info.value).lower()
+
+
+@pytest.mark.parametrize(
+    "bad_name",
+    ["../outside", "..", "nested/name", "nested\\name", "/absolute", "   "],
+)
+def test_config_manager_rejects_unsafe_config_names(config_dir, bad_name):
+    """Unsafe names should never resolve outside the config directory."""
+    manager = ConfigManager(config_dir, format="yaml")
+    with pytest.raises(FormatError, match="Config name|Invalid config name"):
+        manager.add_config(bad_name, {"a": 1}, obscure_passwords=False)
 
 
 def test_config_manager_get_config(config_dir):
@@ -340,6 +351,39 @@ def test_config_manager_is_encrypted(config_dir):
     assert manager2.is_encrypted()
 
 
+def test_decrypt_config_writes_plaintext_with_directory_encryption(config_dir):
+    """decrypt_config should write plaintext even when directory encryption is set."""
+    manager = ConfigManager(config_dir, password="dir-password")
+    manager.add_config("plain_target", {"key": "value"}, obscure_passwords=False)
+
+    manager.decrypt_config("plain_target")
+
+    config_file = config_dir / "plain_target.toml"
+    with open(config_file, "rb") as f:
+        content = f.read()
+
+    assert b"VAULTCONFIG_ENCRYPT_V1" not in content
+    assert b"key" in content
+
+
+def test_remove_encryption_clears_directory_and_per_config_encryption(config_dir):
+    """remove_encryption should disable both directory and per-config encryption."""
+    manager = ConfigManager(config_dir, password="dir-password")
+    manager.add_config("dir_only", {"k": "v"}, obscure_passwords=False)
+    manager.add_config("per_config", {"k": "v"}, obscure_passwords=False)
+    manager.encrypt_config("per_config", "config-password")
+
+    assert manager.is_config_encrypted("dir_only")
+    assert manager.is_config_encrypted("per_config")
+
+    manager.remove_encryption()
+
+    assert not manager.is_encrypted()
+    assert not manager._config_passwords
+    assert not manager.is_config_encrypted("dir_only")
+    assert not manager.is_config_encrypted("per_config")
+
+
 def test_config_manager_file_permissions(config_dir):
     """Test that config files have secure permissions."""
     import platform
@@ -408,3 +452,150 @@ def test_config_manager_update_config(config_dir):
 
     entry = manager.get_config("test")
     assert entry.get("key") == "value2"
+
+
+class TestNestedObscuring:
+    """Tests that nested sensitive fields are obscured on disk and revealed via API."""
+
+    def test_nested_sensitive_field_obscured_on_disk(self, config_dir):
+        from pydantic import BaseModel, Field
+
+        class DbConfig(BaseModel):
+            host: str
+            password: str = Field(json_schema_extra={"sensitive": True})
+
+        class AppConfig(BaseModel):
+            database: DbConfig
+
+        from vaultconfig.schema import ConfigSchema
+
+        schema = ConfigSchema(AppConfig)
+        manager = ConfigManager(config_dir, format="toml", schema=schema)
+        manager.add_config(
+            "app",
+            {"database": {"host": "localhost", "password": "secret"}},
+        )
+
+        raw = (config_dir / "app.toml").read_text()
+        assert "secret" not in raw
+
+    def test_nested_sensitive_field_revealed_via_api(self, config_dir):
+        from pydantic import BaseModel, Field
+
+        class DbConfig(BaseModel):
+            host: str
+            password: str = Field(json_schema_extra={"sensitive": True})
+
+        class AppConfig(BaseModel):
+            database: DbConfig
+
+        from vaultconfig.schema import ConfigSchema
+
+        schema = ConfigSchema(AppConfig)
+        manager = ConfigManager(config_dir, format="toml", schema=schema)
+        manager.add_config(
+            "app",
+            {"database": {"host": "localhost", "password": "secret"}},
+        )
+
+        entry = manager.get_config("app")
+        assert entry.get("database.password") == "secret"
+
+    def test_nested_sensitive_field_revealed_in_get_all(self, config_dir):
+        from pydantic import BaseModel, Field
+
+        class DbConfig(BaseModel):
+            host: str
+            password: str = Field(json_schema_extra={"sensitive": True})
+
+        class AppConfig(BaseModel):
+            database: DbConfig
+
+        from vaultconfig.schema import ConfigSchema
+
+        schema = ConfigSchema(AppConfig)
+        manager = ConfigManager(config_dir, format="toml", schema=schema)
+        manager.add_config(
+            "app",
+            {"database": {"host": "localhost", "password": "secret"}},
+        )
+
+        all_data = manager.get_config("app").get_all(reveal_secrets=True)
+        assert all_data["database"]["password"] == "secret"
+
+    def test_nested_sensitive_fields_not_revealed_without_flag(self, config_dir):
+        from pydantic import BaseModel, Field
+
+        class DbConfig(BaseModel):
+            host: str
+            password: str = Field(json_schema_extra={"sensitive": True})
+
+        class AppConfig(BaseModel):
+            database: DbConfig
+
+        from vaultconfig.schema import ConfigSchema
+
+        schema = ConfigSchema(AppConfig)
+        manager = ConfigManager(config_dir, format="toml", schema=schema)
+        manager.add_config(
+            "app",
+            {"database": {"host": "localhost", "password": "secret"}},
+        )
+
+        all_data = manager.get_config("app").get_all(reveal_secrets=False)
+        assert all_data["database"]["password"] != "secret"
+
+    def test_deeply_nested_obscuring(self, config_dir):
+        from pydantic import BaseModel, Field
+
+        class Credentials(BaseModel):
+            token: str = Field(json_schema_extra={"sensitive": True})
+
+        class ApiConfig(BaseModel):
+            credentials: Credentials
+
+        class AppConfig(BaseModel):
+            api: ApiConfig
+
+        from vaultconfig.schema import ConfigSchema
+
+        schema = ConfigSchema(AppConfig)
+        manager = ConfigManager(config_dir, format="toml", schema=schema)
+        manager.add_config(
+            "app",
+            {"api": {"credentials": {"token": "my-secret-token"}}},
+        )
+
+        raw = (config_dir / "app.toml").read_text()
+        assert "my-secret-token" not in raw
+
+        entry = manager.get_config("app")
+        assert entry.get("api.credentials.token") == "my-secret-token"
+
+    def test_config_entry_reveal_nested_maintains_structure(self, config_dir):
+        from pydantic import BaseModel, Field
+
+        class DbConfig(BaseModel):
+            host: str
+            password: str = Field(json_schema_extra={"sensitive": True})
+
+        class AppConfig(BaseModel):
+            database: DbConfig
+            debug: bool = False
+
+        from vaultconfig.schema import ConfigSchema
+
+        schema = ConfigSchema(AppConfig)
+        manager = ConfigManager(config_dir, format="toml", schema=schema)
+        manager.add_config(
+            "app",
+            {
+                "database": {"host": "localhost", "password": "secret"},
+                "debug": True,
+            },
+        )
+
+        all_data = manager.get_config("app").get_all(reveal_secrets=True)
+        assert all_data["database"]["host"] == "localhost"
+        assert all_data["database"]["password"] == "secret"
+        assert all_data["debug"] is True

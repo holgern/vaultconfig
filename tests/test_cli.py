@@ -1,8 +1,12 @@
 """Tests for CLI commands."""
 
+from pathlib import Path
+
 import pytest
 from click.testing import CliRunner
 
+from vaultconfig import __version__ as package_version
+from vaultconfig._version import __version__ as generated_version
 from vaultconfig.cli import main
 from vaultconfig.config import ConfigManager
 
@@ -323,6 +327,48 @@ def test_cli_version(cli_runner):
     """Test --version flag."""
     result = cli_runner.invoke(main, ["--version"])
     assert result.exit_code == 0
+    assert package_version in result.output
+    assert generated_version in result.output
+
+
+def test_package_version_matches_generated_version():
+    """Public package version should match generated version module."""
+    assert package_version == generated_version
+
+
+def test_cli_set_create_rejects_path_traversal(cli_runner, config_dir, temp_dir):
+    """set --create should reject unsafe config names."""
+    result = cli_runner.invoke(
+        main,
+        ["set", "-d", str(config_dir), "../outside", "a=1", "--create"],
+    )
+    assert result.exit_code != 0
+    assert "invalid config name" in result.output.lower()
+    assert not (temp_dir / "outside.toml").exists()
+
+
+@pytest.mark.parametrize(
+    ("args", "outside_name"),
+    [
+        (["delete", "-d", "{config_dir}", "../outside", "--yes"], "outside.toml"),
+        (["copy", "-C", "{config_dir}", "safe", "../outside"], "outside.toml"),
+        (["rename", "-C", "{config_dir}", "safe", "../outside"], "outside.toml"),
+        (["encrypt-file", "-d", "{config_dir}", "../outside"], "outside.toml"),
+        (["decrypt-file", "-d", "{config_dir}", "../outside"], "outside.toml"),
+    ],
+)
+def test_cli_commands_reject_path_traversal(
+    cli_runner, config_dir, temp_dir, args, outside_name
+):
+    """CLI commands should reject unsafe config names consistently."""
+    manager = ConfigManager(config_dir)
+    manager.add_config("safe", {"key": "value"}, obscure_passwords=False)
+
+    resolved_args = [arg.format(config_dir=config_dir) for arg in args]
+    result = cli_runner.invoke(main, resolved_args)
+    assert result.exit_code != 0
+    assert "invalid config name" in result.output.lower()
+    assert not (temp_dir / outside_name).exists()
 
 
 def test_cli_encrypt_help(cli_runner):
@@ -808,9 +854,9 @@ def test_cli_export_env_dry_run_usage_fish(cli_runner, config_dir):
     assert "| source" in result.output
 
 
-def test_filter_dict():
+def testfilter_dict():
     """Test _filter_dict helper function."""
-    from vaultconfig.cli import _filter_dict
+    from vaultconfig.env_export import filter_dict
 
     test_data = {
         "database": {
@@ -829,7 +875,7 @@ def test_filter_dict():
     }
 
     # Test 1: Include only database keys
-    filtered = _filter_dict(test_data, include=("database.*",), exclude=None)
+    filtered = filter_dict(test_data, include=("database.*",), exclude=None)
     assert "database" in filtered
     assert "api" not in filtered
     assert "debug" not in filtered
@@ -837,7 +883,7 @@ def test_filter_dict():
     assert filtered["database"]["port"] == 5432
 
     # Test 2: Exclude password fields
-    filtered = _filter_dict(test_data, include=None, exclude=("*.password", "*.key"))
+    filtered = filter_dict(test_data, include=None, exclude=("*.password", "*.key"))
     assert "database" in filtered
     assert "password" not in filtered["database"]
     assert "host" in filtered["database"]
@@ -846,14 +892,14 @@ def test_filter_dict():
     assert "endpoint" in filtered["api"]
 
     # Test 3: Include database but exclude password
-    filtered = _filter_dict(test_data, include=("database.*",), exclude=("*.password",))
+    filtered = filter_dict(test_data, include=("database.*",), exclude=("*.password",))
     assert "database" in filtered
     assert "password" not in filtered["database"]
     assert "host" in filtered["database"]
     assert "api" not in filtered
 
     # Test 4: Include specific keys
-    filtered = _filter_dict(
+    filtered = filter_dict(
         test_data, include=("database.host", "database.port", "version"), exclude=None
     )
     assert "database" in filtered
@@ -864,11 +910,11 @@ def test_filter_dict():
     assert "api" not in filtered
 
     # Test 5: No filters (should return all data)
-    filtered = _filter_dict(test_data, include=None, exclude=None)
+    filtered = filter_dict(test_data, include=None, exclude=None)
     assert filtered == test_data
 
     # Test 6: Exclude takes precedence over include
-    filtered = _filter_dict(
+    filtered = filter_dict(
         test_data, include=("database.*",), exclude=("database.password",)
     )
     assert "database" in filtered
@@ -1080,3 +1126,8 @@ def test_cli_export_env_with_include_and_exclude(cli_runner, config_dir):
     assert "DATABASE_PORT" in result.output
     assert "DATABASE_USERNAME" in result.output
     assert "secret" not in result.output
+
+
+def test_docs_do_not_reference_old_encryption_header():
+    """Ensure docs/api.rst does not reference the old V0 encryption header."""
+    assert "VAULTCONFIG_ENCRYPT_V0" not in Path("docs/api.rst").read_text()

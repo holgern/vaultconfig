@@ -273,3 +273,105 @@ def test_schema_complex_types():
     result = schema.validate(data)
     assert result["tags"] == ["a", "b", "c"]
     assert result["metadata"] == {"key": "value"}
+
+
+class TestNestedSensitiveFields:
+    """Tests for recursive sensitive-field discovery in nested models."""
+
+    def test_top_level_sensitive_field(self):
+        class AppConfig(BaseModel):
+            password: str = Field(json_schema_extra={"sensitive": True})
+            host: str = "localhost"
+
+        schema = ConfigSchema(AppConfig)
+        assert schema.get_sensitive_fields() == {"password"}
+
+    def test_nested_sensitive_field_discovered_as_dotted_path(self):
+        class DbConfig(BaseModel):
+            host: str
+            password: str = Field(json_schema_extra={"sensitive": True})
+
+        class AppConfig(BaseModel):
+            database: DbConfig
+            debug: bool = False
+
+        schema = ConfigSchema(AppConfig)
+        assert schema.get_sensitive_fields() == {"database.password"}
+
+    def test_deeply_nested_sensitive_field(self):
+        class Credentials(BaseModel):
+            token: str = Field(json_schema_extra={"sensitive": True})
+
+        class ApiConfig(BaseModel):
+            credentials: Credentials
+
+        class AppConfig(BaseModel):
+            api: ApiConfig
+
+        schema = ConfigSchema(AppConfig)
+        assert schema.get_sensitive_fields() == {"api.credentials.token"}
+
+    def test_multiple_nested_sensitive_fields(self):
+        class DbConfig(BaseModel):
+            password: str = Field(json_schema_extra={"sensitive": True})
+            connection_string: str = Field(json_schema_extra={"sensitive": True})
+
+        class AppConfig(BaseModel):
+            database: DbConfig
+            api_key: str = Field(json_schema_extra={"sensitive": True})
+
+        schema = ConfigSchema(AppConfig)
+        expected = {"api_key", "database.password", "database.connection_string"}
+        assert schema.get_sensitive_fields() == expected
+
+    def test_model_without_sensitive_fields_returns_empty(self):
+        class SimpleModel(BaseModel):
+            host: str
+            port: int = 5432
+
+        schema = ConfigSchema(SimpleModel)
+        assert schema.get_sensitive_fields() == set()
+
+    def test_non_pydantic_annotation_not_explored(self):
+        class AppConfig(BaseModel):
+            host: str
+            tags: list[str] = []
+
+        schema = ConfigSchema(AppConfig)
+        assert schema.get_sensitive_fields() == set()
+
+
+class TestOptionalDependencyBranches:
+    """Tests for error handling when Pydantic is missing."""
+
+    def test_schema_requires_pydantic(self, monkeypatch):
+        from vaultconfig import schema
+
+        monkeypatch.setattr(schema, "HAS_PYDANTIC", False)
+
+        with pytest.raises(ImportError, match="pydantic"):
+            schema.ConfigSchema(object())
+
+    def test_create_simple_schema_requires_pydantic(self, monkeypatch):
+        from vaultconfig import schema
+
+        monkeypatch.setattr(schema, "HAS_PYDANTIC", False)
+
+        with pytest.raises(ImportError, match="pydantic"):
+            schema.create_simple_schema({})
+
+    def test_get_sensitive_fields_no_pydantic_returns_empty(self, monkeypatch):
+        from pydantic import BaseModel, Field
+
+        from vaultconfig.schema import ConfigSchema
+
+        class AppConfig(BaseModel):
+            password: str = Field(json_schema_extra={"sensitive": True})
+
+        schema_obj = ConfigSchema(AppConfig)
+
+        from vaultconfig import schema
+
+        monkeypatch.setattr(schema, "HAS_PYDANTIC", False)
+
+        assert schema_obj.get_sensitive_fields() == set()

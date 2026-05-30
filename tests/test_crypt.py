@@ -431,3 +431,23 @@ class TestDecryptErrors:
 
         with pytest.raises((DecryptionError, InvalidPasswordError)):
             crypt.decrypt(corrupted, password)
+
+
+class TestOptionalDependencyBranches:
+    """Tests for error handling when optional crypto dependencies are missing."""
+
+    def test_encrypt_requires_pynacl(self, monkeypatch):
+        from vaultconfig import crypt
+
+        monkeypatch.setattr(crypt, "HAS_NACL", False)
+
+        with pytest.raises(ImportError, match="PyNaCl"):
+            crypt.encrypt(b"test data", "password")
+
+    def test_decrypt_requires_pynacl(self, monkeypatch):
+        from vaultconfig import crypt
+
+        monkeypatch.setattr(crypt, "HAS_NACL", False)
+
+        with pytest.raises(ImportError, match="PyNaCl"):
+            crypt.decrypt(b"test data", "password")

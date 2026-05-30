@@ -7,9 +7,9 @@ project_uuid = "28b1a3b3-5f5b-45e9-bec2-ba01e4849366"
 project_name = "vaultconfig"
 
 # Taskledger branch-scoped state. This block is intentionally safe to commit.
-ledger_ref = 'main'
-ledger_parent_ref = ''
-ledger_next_task_number = 1
+ledger_ref = "main"
+ledger_parent_ref = ""
+ledger_next_task_number = 2
 ledger_branch_guard = "off"
 
 # Project-local taskledger overrides.
