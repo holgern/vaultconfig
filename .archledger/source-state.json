@@ -1,0 +1,303 @@
+{
+  "created_at": "2026-05-30T11:00:09Z",
+  "directories": {
+    ".": {
+      "file_count": 73,
+      "sha256": "6b11392922f23a193d150deb66e39b54c346717747d463091528d3a401e69a95"
+    },
+    ".github": {
+      "file_count": 4,
+      "sha256": "293b352196ed96d6b100552da6edd9f2b92300eec6e2920fe1d9f86cdb44a898"
+    },
+    ".github/workflows": {
+      "file_count": 4,
+      "sha256": "0bd671cffb677169c59970f61614d23e62932399f92c27f8250b0b5b09609b0f"
+    },
+    "docs": {
+      "file_count": 9,
+      "sha256": "e50083814938fc05d234e2bd2731feaecaa502ea7ce7c6cbe1efdf2962fde87c"
+    },
+    "examples": {
+      "file_count": 25,
+      "sha256": "7c9b62711ccbd336f02df674db5a1da18d95060ae6b4a65c0a26129b1d2949ba"
+    },
+    "examples/ini_config": {
+      "file_count": 3,
+      "sha256": "e3160d5d9f373097b5a944aa98528564065e2ebcf8a9b011a081ccd4c8e3eaff"
+    },
+    "examples/toml_config": {
+      "file_count": 10,
+      "sha256": "5440e3f2f24cf01eebed6c4212c6d9e2102a415570058330b6250483387fe80b"
+    },
+    "examples/yaml_config": {
+      "file_count": 10,
+      "sha256": "977fbd76f0a6aad06201165aacb33c593280baf2b409b8bfedcc7ae737a60cd1"
+    },
+    "tests": {
+      "file_count": 11,
+      "sha256": "01df9bb287170d08943050c685a6a7b21469413514be1aff023a2521e26d5988"
+    },
+    "vaultconfig": {
+      "file_count": 14,
+      "sha256": "58f954de542ba440e1d54521721af9f1d3c47d5c0552fc90ccad6d64e1a92fa3"
+    },
+    "vaultconfig/formats": {
+      "file_count": 5,
+      "sha256": "4112a66570a91478466ed86b08ebb319ffa57a2b816ad25f2fa8e74ba5541a91"
+    }
+  },
+  "files": {
+    ".archledger.toml": {
+      "sha256": "fd543ef77b9ccf7d282595c79277b7b317d29822edba10fedab41dae0075c43d"
+    },
+    ".codecrate.toml": {
+      "sha256": "6621d89ccf2c320e5aca31ce13162a1ff1a6bb654ec571f8cf7d9d3695df5ca8"
+    },
+    ".github/workflows/codecov.yml": {
+      "sha256": "e73d140db9a42cd1cf0c7153fdaa23677bcd8cf91e51be0db6c8b129158efb40"
+    },
+    ".github/workflows/pre-commit.yml": {
+      "sha256": "1bb9cb5f63d68e02f4ef6098bf9a8d5ab6b5225ef537202b12f2096b3ed376e5"
+    },
+    ".github/workflows/python-publish.yml": {
+      "sha256": "a9e752e2ec2436b79c8596e1fe1624dda516fd56e47ffb1e5b7c14ae3648803b"
+    },
+    ".github/workflows/tests.yml": {
+      "sha256": "493a2f1cf003569032a827e5e6846f75262a5348b6413c81398c131e030e9223"
+    },
+    ".pre-commit-config.yaml": {
+      "sha256": "9834074fefe450c722aad95da722cb303c7027bb68d404223aa308eeb0225c8c"
+    },
+    ".prettierrc.yml": {
+      "sha256": "eff47e8a83fa7cb7c3d2c47ea72d72aa288588b0851583ec2da08503473c7cc5"
+    },
+    ".readthedocs.yaml": {
+      "sha256": "efe946f04be1758d3ff1d060235ecbd515996572baa4205ad3753a1fa8988a28"
+    },
+    ".ruff.toml": {
+      "sha256": "d3b056c91694211bba78ca0a5286967cfabae920b1c13d8a8dc6347f5f76c81b"
+    },
+    ".taskledger.toml": {
+      "sha256": "25dbc0b4da2f8afd428071217e109a76261e8bf9726087f46537a528302e0b75"
+    },
+    "README.md": {
+      "sha256": "b2fbf0c0766e56ae38d76a37f955684274a2fc3ed5b38625b78fb072aaa65230"
+    },
+    "docs/api.rst": {
+      "sha256": "ad914f9c06e01ae9af92fbd483d8abdbd62e34e9ac9014c187284bf4939c1913"
+    },
+    "docs/cli.rst": {
+      "sha256": "2028e263376013eeedd3d3a5708f719ee8707b174333184021e798043bd5a596"
+    },
+    "docs/conf.py": {
+      "sha256": "4e70a1eace83e861c6b193c009e60ea392d16b6bc4bf1e9d44fe6d404951f9ab"
+    },
+    "docs/examples.rst": {
+      "sha256": "e88c7ef2facb767437b87268be017ac568b432550ba4c54a1fc2ad3982261e25"
+    },
+    "docs/index.rst": {
+      "sha256": "b427d672deebc7c0cdc6695c50673c9687ad6928777d65423360d74543a3efe1"
+    },
+    "docs/installation.rst": {
+      "sha256": "31450942fe89537e970723e5379855246f74fe92f6b094126562e984ab264b8a"
+    },
+    "docs/make.py": {
+      "sha256": "d598fe7ac6a3cf35e5b28dcc2eede1a01ac6be35ec275739ca8f46e163e9230f"
+    },
+    "docs/quickstart.rst": {
+      "sha256": "01ad464577ecd41a576b274a1c7028fc977575a269a433af99ce0acde4780e4b"
+    },
+    "docs/security.rst": {
+      "sha256": "10fa71667db0163f397378d950f5c263a07512032fef925082f6a2d345b0cdc0"
+    },
+    "examples/README.md": {
+      "sha256": "136dc47eba7338e179633118299fed42abf58755960c9d13fc3ed7abcbf06899"
+    },
+    "examples/custom_cipher_key_example.py": {
+      "sha256": "257337edbc91eacf63b71c92dd8cd6b0c95b23129357277824b9499c2ab1780b"
+    },
+    "examples/ini_config/README.md": {
+      "sha256": "7ef8bb23d2a96ee53d43ce9a5f67cde14093e1407c5a203aa7a7b4eae5ff70cf"
+    },
+    "examples/ini_config/example.py": {
+      "sha256": "a7e8cab909fd283cda76577729a915af3382922307a6fb6e3ff8810fa3db4b60"
+    },
+    "examples/ini_config/example_default_section.py": {
+      "sha256": "3a7af45ddca533ba964ecd3bcd7ddd571f1bfa2c5b69745991a11acaaeb2382a"
+    },
+    "examples/toml_config/README.md": {
+      "sha256": "6f33411f6b992e89015645b1aa6e6833c44a937651697db9e2e5657a23d6ce48"
+    },
+    "examples/toml_config/app_config.toml": {
+      "sha256": "7bb76b36149b689d87882ce9f6f0e6e8da3bd48f56ee16f836732a5b77f81bfa"
+    },
+    "examples/toml_config/environments.toml": {
+      "sha256": "623c58c2394b39a9c61d9e4fd6f357a39a9ff0ba0125a2ba80dfeb8dc450da03"
+    },
+    "examples/toml_config/example.py": {
+      "sha256": "a2434ef17e40d1f8196991b91eba9211a6052a1ead04c3b5c4f4db1425e7c3dd"
+    },
+    "examples/toml_config/example_advanced.py": {
+      "sha256": "b4787bfd60bbb0ec1174d600b92b4f0443a6eb179a83383403696b6e2356639d"
+    },
+    "examples/toml_config/invalid_database.toml": {
+      "sha256": "4708ee7d66aac9e3ac64848a5cb6f3d1dffa106765479d5e6d0f1a05ff9321b5"
+    },
+    "examples/toml_config/nested_config.toml": {
+      "sha256": "d9e5850f480f33829da298a40456d157743ed5392acf02d6e2cdc0778cf9bdf7"
+    },
+    "examples/toml_config/obscured_database.toml": {
+      "sha256": "2bff4f273615696a174ea6028d26d5720cf3d5d536be0327dab02599b6795840"
+    },
+    "examples/toml_config/types_demo.toml": {
+      "sha256": "417df31de0547657e41f365178f674dd26b3613be6c76ae76f325978ceb70177"
+    },
+    "examples/toml_config/valid_database.toml": {
+      "sha256": "bb7f2e76996f7a34ac6beb538200493a2a335a2f57c435d4f7106fb7e3cb9fa1"
+    },
+    "examples/yaml_config/README.md": {
+      "sha256": "86dc1282401d536e4c58c1d814151b7083ac871cdd92867b218edcf374fe0da3"
+    },
+    "examples/yaml_config/app_config.yaml": {
+      "sha256": "cd0e250cda71028c0e7e590bc0bd51296471d5d339bcc9f1342f3e2e7c37bd95"
+    },
+    "examples/yaml_config/environments.yaml": {
+      "sha256": "0bda3fc27d504182d94cd79c5975c7921c430c7e61288130db115586bb5cd58f"
+    },
+    "examples/yaml_config/example.py": {
+      "sha256": "339df82c1fd1b263accd32b52bc6322428dc442a4b8fb15c8af0a3aa0729c452"
+    },
+    "examples/yaml_config/example_advanced.py": {
+      "sha256": "6780d6ed9cd44b1fdc9f88ddf73959595f412653e7ed1a8137f19938540da672"
+    },
+    "examples/yaml_config/invalid_database.yaml": {
+      "sha256": "f90908ebc70234b20945a98a1ac8c60690dc288c76b9aa7b9585330b32a0d8c2"
+    },
+    "examples/yaml_config/nested_config.yaml": {
+      "sha256": "f07016863d47e26e87076bb3c27e2e790ed9a3ef62bc594c9f86f85ef784eff2"
+    },
+    "examples/yaml_config/obscured_database.yaml": {
+      "sha256": "bbca043baa2f61864325d9452c06327ce45ef8be07f6d9cec38808d0a2ffd7ad"
+    },
+    "examples/yaml_config/types_demo.yaml": {
+      "sha256": "c1a2531b2e8058314da4f67218296f38fe7c4828f68a2cbe2450131ba67f2dd6"
+    },
+    "examples/yaml_config/valid_database.yaml": {
+      "sha256": "9f6e8268ee8cbc10860aecf3bf2b5b35c0f8fa2425df6df8c881b21ef4d94693"
+    },
+    "pyproject.toml": {
+      "sha256": "dfc94ed8f69db47f9fa580f59fac5c70e837a36540be7b63e74a793d6de60721"
+    },
+    "setup.py": {
+      "sha256": "17a4a14bfbc3ae16ead601446e683257814439ad201cd01034722810b8591336"
+    },
+    "tests/__init__.py": {
+      "sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855"
+    },
+    "tests/conftest.py": {
+      "sha256": "1ba39ca9a18ac2dbd54468c2c362692abdf824e04b6d7f347de9411869be5b31"
+    },
+    "tests/test_cli.py": {
+      "sha256": "3ad7ae18597b9bb59dbca338b75fb933504afb01dfead2092ce96e6a7ce2a452"
+    },
+    "tests/test_config.py": {
+      "sha256": "5bf56f98735ee7e2d278179ed20f5247a3d1703e43cb858edb8a648c4de28cab"
+    },
+    "tests/test_crypt.py": {
+      "sha256": "aa89bc7fa605307dae748ce803462bdb531cd20111bb6116eca0ab05f95b0b6e"
+    },
+    "tests/test_env_export.py": {
+      "sha256": "ccb16e2a2fb5bdb03e00c12422fb37e02acdca61d18efb3b363b7a93a1447e63"
+    },
+    "tests/test_formats.py": {
+      "sha256": "81e856d47b639eff4fbbf62d2e74eb00516cc5255adf59caae1a7cc605b72034"
+    },
+    "tests/test_io.py": {
+      "sha256": "3e97fe56990b7038ba697c4000e73183a6f51e5204d9752f7df6a3746edccb6c"
+    },
+    "tests/test_obscure.py": {
+      "sha256": "d3f94f4e574382bec73d7267eeef979c925bc61bb9a1cb11537ddc562abd0801"
+    },
+    "tests/test_obscure_custom_keys.py": {
+      "sha256": "a2307e4efd2176d595cfe32caa057913ef7ba6fcc4f57d0a78eb56d6624ad94c"
+    },
+    "tests/test_schema.py": {
+      "sha256": "57775b1deee996ee8eba952431a5e93cceb8d752832ce7b083276415e4ba1dd6"
+    },
+    "vaultconfig/__init__.py": {
+      "sha256": "0068bd35561fb5b75bf8a47c60934be203577bffc1797911a534d5c9335f426a"
+    },
+    "vaultconfig/cli.py": {
+      "sha256": "d53db05126a19f81f0de84f2471f17a9a7a7b8da008e62bfd8c8183e59b6ee4c"
+    },
+    "vaultconfig/config.py": {
+      "sha256": "3c575c2fc223bb54649e557ffa51675005bf9fb1ee8ef77b6d0513e467724ad0"
+    },
+    "vaultconfig/crypt.py": {
+      "sha256": "3ec74ed2e7df67286500f2662dfd96390192273404a81a4b53831208ea216838"
+    },
+    "vaultconfig/env_export.py": {
+      "sha256": "a4b337d78fef7074b44fbf3776b6ec5320de9c78d65540e23c2b9c8fb017bc1c"
+    },
+    "vaultconfig/exceptions.py": {
+      "sha256": "c3f8091875c5aa28cc5bd89b6de6b3fdda70e0baddf656a34b8ab771d983c047"
+    },
+    "vaultconfig/formats/__init__.py": {
+      "sha256": "23552acc6486fbc1072066875cd53592a734993f974e9695ce68494fc8bcd6f9"
+    },
+    "vaultconfig/formats/base.py": {
+      "sha256": "2d9bf2aea65877b4023da8fdbc1a9aeb7da44a8077e7ea6dbe0f94227886ef2e"
+    },
+    "vaultconfig/formats/ini_format.py": {
+      "sha256": "3e854b1b1bbc2411d0f0d59111e4195a1c08f85815288e67e583b556de1ffd21"
+    },
+    "vaultconfig/formats/toml_format.py": {
+      "sha256": "610bf8c8ca385e1c501f795e0b60828ac1ce44bcb83d01e364b2b5a2bbec8f92"
+    },
+    "vaultconfig/formats/yaml_format.py": {
+      "sha256": "8e98925c0a55479596bef2207e24dbb0d9a1e3c9c81b472248a8e7fd9061a549"
+    },
+    "vaultconfig/io.py": {
+      "sha256": "4a0143165309eaf7e5dd88d6bbc4206970530fa38e39f5aff18233997fcff630"
+    },
+    "vaultconfig/obscure.py": {
+      "sha256": "0ce29cc267fa022d51970d2e26ffa2f973ed7a90c81d75cb3b87fc69e0857075"
+    },
+    "vaultconfig/schema.py": {
+      "sha256": "de07907c20529098371a50122071ceb2085d243db57c52d2f803060e4114e989"
+    }
+  },
+  "project_name": "vaultconfig",
+  "project_uuid": "ccf3ed60-2092-41bb-95dd-b1bab1b30af3",
+  "reason": "after-architecture-doc-creation",
+  "scanner": {
+    "exclude": [
+      ".git/**",
+      ".venv/**",
+      "**/__pycache__/**",
+      ".mypy_cache/**",
+      ".pytest_cache/**",
+      ".ruff_cache/**",
+      "dist/**",
+      "build/**"
+    ],
+    "hash_algorithm": "sha256",
+    "hash_content": "utf8-surrogateescape-lf-normalized",
+    "include": [
+      "**/*.py",
+      "**/*.toml",
+      "**/*.md",
+      "**/*.adoc",
+      "**/*.rst",
+      "**/*.j2",
+      "**/*.yaml",
+      "**/*.yml",
+      "**/*.json"
+    ],
+    "max_file_bytes": 1000000,
+    "mode": "auto",
+    "used": "git"
+  },
+  "schema": "archledger.source-state.v2",
+  "updated_at": "2026-05-30T11:00:09Z"
+}
